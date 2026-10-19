@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>agit features: what, why, how</title>
+  <meta name="description" content="Every agit feature with what it does, why it exists and how it works, grouped by area and marked built, in progress or planned: machine contract, storage, refs, coordination, provenance, git parity, server, pull requests, policies, knowledge, agent tooling, web UI, operations, interop, performance.">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <script>try { if (localStorage.getItem("agit.theme") === "light" || (!localStorage.getItem("agit.theme") && matchMedia("(prefers-color-scheme: light)").matches)) document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<nav class="nav" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="28" height="28"> agit</a>
+    <button class="icon-btn menu-btn" data-menu aria-expanded="false" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="nav-links">
+      <a href="index.html#why">Why agit</a>
+      <a href="features.html">Features</a>
+      <a href="scale.html">Large repos</a>
+      <a href="guide.html">Guide</a>
+      <a href="guide.html#claude">Claude Code</a>
+      <button class="icon-btn" data-theme-toggle aria-label="Switch theme" title="Theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9c-4.97 0-9-4.03-9-9Z"/></svg></button>
+      <a class="btn sm" href="https://github.com/shadow-kernel/agit">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+<header class="hero" style="padding-bottom:0.5rem">
+  <div class="blobs" aria-hidden="true"><span class="blob a"></span><span class="blob c"></span></div>
+  <div class="wrap" style="grid-template-columns:1fr">
+    <div>
+      <div class="eyebrow">The feature list</div>
+      <h1 style="font-size:clamp(2rem,4.5vw,3.4rem)">Everything agit does, and <span class="grad">why</span>.</h1>
+      <p class="lead">Each entry answers three questions: what it is, why it exists, how it works. Grouped by area, searchable, and honest about status: <span class="badge built">built</span> ships in 0.1.0, <span class="badge progress">in progress</span> is on <code>main</code>, <span class="badge planned">planned</span> is designed in the RFCs and roadmap but not implemented.</p>
+    </div>
+  </div>
+</header>
+
+<div class="wrap docs">
+  <aside class="toc" data-toc aria-label="Feature groups"><h4>Groups</h4></aside>
+  <div>
+    <div class="filters" role="search">
+      <input type="search" data-search placeholder="Search features, commands, concepts…" aria-label="Search features">
+      <button class="chip" data-status-filter="all" aria-pressed="true">All</button>
+      <button class="chip" data-status-filter="built" aria-pressed="false">Built</button>
+      <button class="chip" data-status-filter="progress" aria-pressed="false">In progress</button>
+      <button class="chip" data-status-filter="planned" aria-pressed="false">Planned</button>
+      <span class="count" data-count aria-live="polite"></span>
+    </div>
+    <div data-features>
+      <noscript><p class="callout warn">The feature list is rendered from <code>assets/features.js</code> and needs JavaScript. The same content lives in the <a href="https://github.com/shadow-kernel/agit/blob/main/README.md">README</a> and the <a href="https://github.com/shadow-kernel/agit/tree/main/docs/handbook">handbook</a>.</p></noscript>
+    </div>
+  </div>
+</div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><a class="brand" href="./"><img src="assets/logo.svg" alt="" width="28" height="28"> agit</a><p>Version control and collaboration for AI agents. MIT or Apache-2.0.</p></div>
+    <div><h4>Site</h4><a href="index.html#why">Why agit</a><a href="features.html">Features</a><a href="scale.html">Large repositories</a><a href="guide.html">Guide</a></div>
+    <div><h4>Project</h4><a href="https://github.com/shadow-kernel/agit">GitHub repository</a><a href="https://github.com/shadow-kernel/agit/releases">Releases</a><a href="https://github.com/shadow-kernel/agit/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/ROADMAP.md">Roadmap</a></div>
+    <div><h4>Documentation</h4><a href="https://github.com/shadow-kernel/agit/tree/main/docs/handbook">Handbook</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/API.md">HTTP API</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/ARCHITECTURE.md">Architecture</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/SECURITY.md">Security</a></div>
+  </div>
+</footer>
+<script src="assets/features.js"></script>
+<script src="assets/site.js" defer></script>
+</body>
+</html>

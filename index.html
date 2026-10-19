@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>agit: version control built for AI agents</title>
+  <meta name="description" content="agit keeps git's workflow and rebuilds everything underneath for AI agents: JSON everywhere, compare-and-swap refs, leases, checkpoints, an event stream, a knowledge base and a hosting server with pull requests and policies.">
+  <meta property="og:title" content="agit: version control built for AI agents">
+  <meta property="og:description" content="Same workflow as git, re-engineered for machines that commit thousands of times an hour. Why agit instead of git, the feature list, and the full guide.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    try { if (localStorage.getItem("agit.theme") === "light" || (!localStorage.getItem("agit.theme") && matchMedia("(prefers-color-scheme: light)").matches)) document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}
+  </script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<nav class="nav" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="28" height="28"> agit</a>
+    <button class="icon-btn menu-btn" data-menu aria-expanded="false" aria-label="Menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="#why">Why agit</a>
+      <a href="features.html">Features</a>
+      <a href="scale.html">Large repos</a>
+      <a href="guide.html">Guide</a>
+      <a href="guide.html#claude">Claude Code</a>
+      <button class="icon-btn" data-theme-toggle aria-label="Switch theme" title="Theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9c-4.97 0-9-4.03-9-9Z"/></svg>
+      </button>
+      <a class="btn sm" href="https://github.com/shadow-kernel/agit">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+
+<!-- ======================================================================= -->
+<header class="hero">
+  <div class="blobs" aria-hidden="true"><span class="blob a"></span><span class="blob b"></span><span class="blob c"></span></div>
+  <div class="grid-lines" aria-hidden="true"></div>
+  <div class="wrap">
+    <div>
+      <span class="kicker"><b>0.1.0</b> Rust · MIT or Apache-2.0 · single binary</span>
+      <h1>git's workflow.<br><span class="grad">Re-engineered for agents.</span></h1>
+      <p class="lead">git was designed for a human who makes a handful of commits a day and reads prose. AI agents make thousands of tiny changes in parallel, crash mid-operation, retry blindly and have to coordinate without anyone watching. agit keeps <code>init</code>, <code>add</code>, <code>commit</code>, <code>branch</code>, <code>merge</code>, <code>push</code> and <code>pull</code>, and rebuilds everything underneath for that world.</p>
+      <div class="hero-actions">
+        <a class="btn primary" href="#why">Why not just git?</a>
+        <a class="btn" href="guide.html">Install and run in 5 minutes</a>
+        <a class="btn ghost" href="features.html">Every feature</a>
+      </div>
+      <div class="hero-meta">
+        <span>JSON on every command</span>
+        <span>Compare-and-swap refs</span>
+        <span>Leases, checkpoints, events</span>
+        <span>Server with PRs and policies</span>
+      </div>
+    </div>
+    <div class="terminal reveal" data-terminal='[
+      {"cmd":"agit lease claim src/auth --ttl 30m --note \"rotate session tokens\""},
+      {"out":"lease 3bd2ec0d8a15 granted to coder-1 for src/auth","cls":"ok"},
+      {"cmd":"agit commit -a -m \"Rotate tokens on login\" --intent \"Close SEC-12\" --task SEC-12 --json"},
+      {"out":"{\"ok\":true,\"result\":{\"id\":\"edf2c5ac…\",\"branch\":\"feature/auth\",\"summary\":\"Rotate tokens on login\"}}","cls":"ok","pause":500},
+      {"cmd":"AGIT_AGENT=coder-2 agit commit -a -m \"tweak login\" --json; echo exit=$?"},
+      {"out":"{\"ok\":false,\"error\":{\"code\":\"lease_conflict\",\"message\":\"src/auth/login.rs is held by coder-1 (lease 3bd2ec0d8a15)\",\"retryable\":false}}","cls":"err"},
+      {"out":"exit=3","cls":"err","pause":700},
+      {"cmd":"agit pr create --push -t \"Rotate tokens\" --intent \"Close SEC-12\" --task SEC-12"},
+      {"out":"pull request #14 opened: feature/auth → main (mergeable, 1 commit)","cls":"ok"},
+      {"cmd":"agit events --follow --kind pull."},
+      {"out":"#131 pull.review   reviewer-1  {\"number\":14,\"decision\":\"approve\"}"},
+      {"out":"#132 pull.merge    reviewer-1  {\"number\":14,\"merged_commit\":\"9d2e…\"}","pause":2500}
+    ]'>
+      <div class="terminal-bar" aria-hidden="true"><i></i><i></i><i></i><span>coder-1 · feature/auth</span></div>
+      <pre aria-label="Terminal demo of agit commands"></pre>
+    </div>
+  </div>
+</header>
+
+<!-- ======================================================================= -->
+<section id="why" class="alt">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Why agit, not git</div>
+      <h2>git is the best developer tool of the last twenty years. Used by a fleet of agents, it fails in ten specific, repeatable ways.</h2>
+      <p class="lead">Each failure below is something agit addresses directly, not by wrapping git. Everything marked <span class="badge built">built</span> ships in 0.1.0 today.</p>
+    </div>
+
+    <div class="grid cols-2">
+      <article class="card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 9l3 3-3 3M13 15h3"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg></div>
+        <h3>Output you have to parse <span class="badge built">built</span></h3>
+        <p><strong>git:</strong> <code>status</code>, <code>log</code>, <code>diff</code> and every error are prose. Agents write regexes that break on locale, version and porcelain changes. Exit codes do not say whether a retry makes sense.</p>
+        <p><strong>agit:</strong> every command takes <code>--json</code> and prints one envelope, <code>{"ok":true,"result":…}</code> or <code>{"ok":false,"error":{code,message,retryable,details}}</code>. Exit codes are classes: 0 ok, 1 error, 3 conflict, 75 retryable. Branch on <code>error.code</code>, never on text.</p>
+      </article>
+
+      <article class="card reveal" data-delay="1">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+        <h3>Stale lock files <span class="badge built">built</span></h3>
+        <p><strong>git:</strong> kill a process at the wrong moment and <code>index.lock</code> or <code>refs/heads/main.lock</code> stays behind. Every later command fails until a human deletes the file. With ten agents this happens hourly.</p>
+        <p><strong>agit:</strong> advisory <code>flock</code> on <code>.agit/locks/*</code>. The kernel releases the lock when the process dies, however it dies. Writes are temp file + fsync + rename. There is nothing to clean up, ever.</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></div>
+        <h3>Conflicts discovered after the budget is spent <span class="badge built">built</span></h3>
+        <p><strong>git:</strong> two agents are told to work in <code>src/auth</code>. Both spend twenty minutes and a few dollars of tokens. The merge fails. git has no primitive for "I am working here for the next thirty minutes".</p>
+        <p><strong>agit:</strong> <strong>leases</strong>: time-limited, glob-based claims on paths. The second agent learns in milliseconds with <code>lease_conflict</code>, before writing a line, and its <code>commit</code> into the leased paths is refused unless forced. Leases expire on their own, so a crashed agent never blocks anyone for long.</p>
+      </article>
+
+      <article class="card reveal" data-delay="1">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 7h10M7 12h10M7 17h6"/><path d="M4 4l3 3-3 3"/></svg></div>
+        <h3>Last writer wins on refs <span class="badge built">built</span></h3>
+        <p><strong>git:</strong> concurrent pushes to a shared branch are a race; compare-and-swap means <code>update-ref</code> with an old value and hoping nobody uses porcelain.</p>
+        <p><strong>agit:</strong> every ref update, local or remote, states what it expects (an id, absent, or any). A concurrent move fails with <code>ref_conflict</code>, which is <code>retryable: true</code>: re-read, reconcile, retry. Several refs move in one atomic transaction.</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/></svg></div>
+        <h3>The commit message is the only metadata <span class="badge built">built</span></h3>
+        <p><strong>git:</strong> why a change was made, which ticket, which agent and model produced it, on whose behalf: free text or nowhere.</p>
+        <p><strong>agit:</strong> structured commit fields <code>intent</code>, <code>task</code>, <code>agent{id, model, run_id, on_behalf_of}</code>, <code>meta</code>, plus an optional Ed25519 signature with the public key inside the commit. <code>agit log --agent coder-2</code> and <code>--task PROJ-123</code> answer provenance questions with no external database.</p>
+      </article>
+
+      <article class="card reveal" data-delay="1">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 21h14"/></svg></div>
+        <h3>No cheap snapshots <span class="badge built">built</span></h3>
+        <p><strong>git:</strong> an agent wants to snapshot before every risky edit. That means WIP commits that pollute history or stash gymnastics that lose untracked files.</p>
+        <p><strong>agit:</strong> <strong>checkpoints</strong> snapshot the whole working tree, untracked files included, onto <code>refs/checkpoints/&lt;workspace&gt;</code>. They never appear in branch history, cost one tree walk, and <code>agit restore</code> puts everything back.</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg></div>
+        <h3>Polling to notice each other <span class="badge built">built</span></h3>
+        <p><strong>git:</strong> agents run <code>git log</code> and <code>git status</code> in loops to see what the others did.</p>
+        <p><strong>agit:</strong> every state change appends one line to <code>events.jsonl</code> with a sequence number: commits, ref moves, leases, workspaces, merges. <code>agit events --follow</code> tails it; the server exposes the same stream over SSE and signed webhooks.</p>
+      </article>
+
+      <article class="card reveal" data-delay="1">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="8" height="16" rx="2"/><rect x="13" y="4" width="8" height="16" rx="2"/></svg></div>
+        <h3>Heavy worktrees <span class="badge built">built</span></h3>
+        <p><strong>git:</strong> one agent per worktree is the right model, but <code>git worktree</code> is an afterthought with its own failure modes.</p>
+        <p><strong>agit:</strong> <strong>workspaces</strong>: <code>agit ws new coder-2</code> creates a working directory on its own branch <code>ws/coder-2</code>, sharing objects, refs, leases and events. A crashed agent's workspace is removed without touching anyone else's state.</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14"/><path d="M4 19a2 2 0 0 0 2 2h14M8 7h8M8 11h6"/></svg></div>
+        <h3>Knowledge lives outside the repository <span class="badge built">built</span></h3>
+        <p><strong>git:</strong> design decisions, gotchas and specs sit in wikis and chat logs. The agent editing the code never sees them.</p>
+        <p><strong>agit:</strong> notes with typed tags next to the code, rules that map paths to tags, staleness when the covered paths change, a draft note from every merged pull request, and <code>agit know context &lt;path&gt;</code>: what to read before touching a path, in one call.</p>
+      </article>
+
+      <article class="card reveal" data-delay="1">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 3 4 14h7l-1 7 9-11h-7l1-7Z"/></svg></div>
+        <h3>SHA-1 and slow status <span class="badge built">built</span></h3>
+        <p><strong>git:</strong> SHA-1 is collision-broken and slow; the SHA-256 mode is still not the default. <code>status</code> re-stats and often re-hashes everything, and agents call it far more often than humans.</p>
+        <p><strong>agit:</strong> BLAKE3 ids with a kind tag inside the hash, multi-threaded above 128 KiB. Tree entries carry file sizes so listings never open blobs; a stat cache and cached directory tree ids make a commit cost time proportional to the change.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================================= -->
+<section id="advantages">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">The advantages, measured</div>
+      <h2>Fewer round trips, no cleanup, and numbers from a real laptop.</h2>
+      <p class="lead">Measured on 2026-10-15 on an Apple Silicon MacBook Pro against git 2.x, a 2,000-file tree, one process per command for both tools. Only measured numbers appear here; everything else is a target in the roadmap.</p>
+    </div>
+    <div class="stats reveal">
+      <div class="stat"><b class="grad">12.5 ms</b><span><code>add</code> + <code>commit</code> of one file (git: 34.6 ms)</span></div>
+      <div class="stat"><b class="grad">3.4 ms</b><span><code>log -n 20</code> (git: 12.7 ms)</span></div>
+      <div class="stat"><b class="grad">11.1 ms</b><span><code>status</code> on a clean tree (git: 15.3 ms)</span></div>
+      <div class="stat"><b class="grad">0</b><span>lock files to delete after a crash</span></div>
+      <div class="stat"><b class="grad">1 call</b><span>for notes, history, leases and open PRs of a path</span></div>
+      <div class="stat"><b class="grad">33</b><span>MCP tools with the same JSON as the CLI</span></div>
+    </div>
+
+    <div class="two" style="margin-top:3rem">
+      <div class="reveal">
+        <h3>The machine contract</h3>
+        <p class="muted">One shape for success, one for failure, on every command, in the HTTP API, in the MCP server and in both SDKs. Codes are stable; messages are for humans.</p>
+<pre class="code" data-title="agit commit --json"><span class="c-cmt"># success</span>
+{"ok":true,"result":{"id":"edf2c5ac…","tree":"560556cb…","parents":["44b9a0f2…"],
+ "branch":"feature/config","summary":"Load the greeting from Config"}}
+
+<span class="c-cmt"># failure: a code, a flag, structured details, exit 75</span>
+{"ok":false,"error":{"code":"ref_conflict","retryable":true,
+ "message":"reference refs/heads/main changed concurrently",
+ "details":{"name":"refs/heads/main","expected":"7f3c…","actual":"9d2e…"}}}</pre>
+      </div>
+      <div class="reveal" data-delay="1">
+        <h3>Exit codes an agent can act on</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Exit</th><th>Meaning</th><th>Examples</th></tr></thead>
+            <tbody>
+              <tr><td><code>0</code></td><td>success</td><td></td></tr>
+              <tr><td><code>1</code></td><td>error, do not repeat as is</td><td><code>policy_violation</code>, <code>nothing_to_commit</code>, <code>invalid</code></td></tr>
+              <tr><td><code>3</code></td><td>conflict, needs a decision</td><td><code>merge_conflicts</code>, <code>lease_conflict</code>, <code>dirty_worktree</code></td></tr>
+              <tr><td><code>75</code></td><td>transient, retry after re-reading</td><td><code>ref_conflict</code>, <code>lock_timeout</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================================= -->
+<section id="compare" class="alt">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Side by side</div>
+      <h2>Same vocabulary, different machinery.</h2>
+      <p class="lead">A frank comparison. <span class="badge built">built</span> ships today, <span class="badge planned">planned</span> is designed in the RFCs but not implemented.</p>
+    </div>
+    <div class="table-wrap reveal">
+      <table>
+        <thead><tr><th style="width:22%">Capability</th><th style="width:34%">git</th><th>agit</th></tr></thead>
+        <tbody>
+          <tr><td>Commands</td><td class="git">init / add / commit / branch / merge / push / pull</td><td class="agit">the same, plus <strong>lease</strong>, <strong>ws</strong>, <strong>checkpoint</strong>, <strong>events</strong>, <strong>pr</strong>, <strong>know</strong>, <strong>key</strong>, <strong>mcp</strong></td></tr>
+          <tr><td>Machine output</td><td class="git">porcelain formats, prose errors, ambiguous exit codes</td><td class="agit"><code>--json</code> everywhere, stable <code>error.code</code>, <code>retryable</code>, exit classes 0/1/3/75 <span class="badge built">built</span></td></tr>
+          <tr><td>Hash</td><td class="git">SHA-1 (SHA-256 optional, not default)</td><td class="agit">BLAKE3-256, kind tag inside the hash, parallel above 128 KiB <span class="badge built">built</span></td></tr>
+          <tr><td>Object encoding</td><td class="git">zlib, text headers, delta-compressed packfiles</td><td class="agit">zstd, binary trees with sizes, JSON commits, append-only pack segments; no delta compression yet <span class="badge built">built</span></td></tr>
+          <tr><td>Verification</td><td class="git">on fsck and some reads</td><td class="agit">every read re-hashes; index and segment indexes checksummed <span class="badge built">built</span></td></tr>
+          <tr><td>Locking</td><td class="git"><code>.lock</code> sentinel files that outlive crashes</td><td class="agit">advisory <code>flock</code>, nothing to clean up <span class="badge built">built</span></td></tr>
+          <tr><td>Ref updates</td><td class="git">last writer wins unless scripted</td><td class="agit">compare-and-swap always, multi-ref transactions, server CAS at the log head <span class="badge built">built</span></td></tr>
+          <tr><td>Work claiming</td><td class="git">none</td><td class="agit">leases with TTL, globs, commit-time enforcement, lease board <span class="badge built">built</span></td></tr>
+          <tr><td>Multiple working dirs</td><td class="git"><code>git worktree</code></td><td class="agit">workspaces on <code>ws/&lt;name&gt;</code>, shared store, leases and events <span class="badge built">built</span></td></tr>
+          <tr><td>Cheap snapshots</td><td class="git">stash, WIP commits</td><td class="agit">checkpoints outside history, untracked files included <span class="badge built">built</span></td></tr>
+          <tr><td>Commit metadata</td><td class="git">message, author, committer, GPG/SSH signature</td><td class="agit">plus intent, task, agent{id, model, run_id, on_behalf_of}, meta; Ed25519 signature with the key in the commit <span class="badge built">built</span></td></tr>
+          <tr><td>Change notification</td><td class="git">none (poll)</td><td class="agit">event log with <code>seq</code>, <code>--follow</code>, SSE, signed webhooks <span class="badge built">built</span></td></tr>
+          <tr><td>History tools</td><td class="git">log, blame, bisect, rebase, filter-branch, LFS</td><td class="agit">log with agent/task/path filters and graph, blame, revert, cherry-pick, stash, grep, reflog, reset, gc, submodules <span class="badge built">built</span>; rebase, bisect <span class="badge planned">planned</span></td></tr>
+          <tr><td>Hosting</td><td class="git">SaaS or a large self-hosted stack</td><td class="agit">one static binary, one data directory, reverse proxy for TLS <span class="badge built">built</span></td></tr>
+          <tr><td>Pull requests</td><td class="git">free-text comments, review states, checks</td><td class="agit">typed PR with intent and task, comments with a <code>kind</code>, reviews, checks, mergeability preview, server-side merge with CAS <span class="badge built">built</span></td></tr>
+          <tr><td>Branch protection</td><td class="git">platform rules</td><td class="agit">protected branches, PR-only, approvals, blockers, required checks, required intent/agent/signature, allowed agents, max files per commit <span class="badge built">built</span></td></tr>
+          <tr><td>Agent identity</td><td class="git">a bot user</td><td class="agit">first-class <code>agent{id, model, run_id}</code> on commits, PRs, reviews and notes; scoped tokens bound to an agent; key registry; audit log <span class="badge built">built</span></td></tr>
+          <tr><td>Knowledge</td><td class="git">wiki, issues, chat</td><td class="agit">typed notes linked to paths/commits/PRs, tag rules, BM25 search, staleness, drafts from merges, context packs, offline store <span class="badge built">built</span></td></tr>
+          <tr><td>Agent tooling</td><td class="git">shell out and parse</td><td class="agit">MCP server (33 tools), Claude Code hooks, Python and TypeScript SDKs <span class="badge built">built</span></td></tr>
+          <tr><td>Very large repositories</td><td class="git">delta compression, LFS, partial clone, sparse checkout</td><td class="agit">content addressing, dedup, zstd, sizes in trees, want/have transfer <span class="badge built">built</span>; blob tiers, chunked large objects, partial clone, sharding <span class="badge planned">planned</span> (<a href="scale.html">details</a>)</td></tr>
+          <tr><td>Replication</td><td class="git">platform managed</td><td class="agit">single node today; Raft log, sharding <span class="badge planned">planned</span></td></tr>
+          <tr><td>Maturity</td><td class="git">20 years, every tool knows it</td><td class="agit">0.1.0, pre-format-freeze; git bridge for import/export <span class="badge built">built</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="two" style="margin-top:2.5rem">
+      <div class="card reveal">
+        <h3>Where agit is better today</h3>
+        <ul class="muted">
+          <li>Agents that must act without a human in the loop: structured errors, CAS refs, leases, checkpoints and events remove the guessing and the cleanup.</li>
+          <li>Many small commits by many parallel workers in one repository (workspaces plus leases).</li>
+          <li>Review and merge automation: typed comments, policies that say exactly why a merge was refused, server-side merge with CAS.</li>
+          <li>Provenance: who (agent, model, run) did what, why, for which ticket, in the commit itself.</li>
+          <li>Knowledge delivery: the right notes arrive with the path, stale notes are visible, merges produce drafts.</li>
+          <li>Operations: one binary, one directory to back up, an audit log.</li>
+        </ul>
+      </div>
+      <div class="card reveal" data-delay="1">
+        <h3>Where git is still better today</h3>
+        <ul class="muted">
+          <li>Ecosystem: every editor, CI system and hosting product speaks git. agit has a bridge, an MCP server, two SDKs and a web UI.</li>
+          <li>History surgery: rebase, interactive rebase, bisect, filter-repo, amend.</li>
+          <li>Huge binaries today: delta compression, LFS, partial clone, sparse checkout. agit's answer is <a href="scale.html">designed and partly built</a>.</li>
+          <li>Hosting features beyond code: issues, projects, discussions, packages, runners.</li>
+          <li>Multi-region availability and frozen formats.</li>
+        </ul>
+        <p class="small muted">Keep a git mirror through <code>agit git export</code> for the humans and tools that need git while the agents work in agit.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================================= -->
+<section id="loop">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">The agent loop</div>
+      <h2>Read, claim, checkpoint, commit with intent, review, remember.</h2>
+      <p class="lead">Every step has a CLI form, an HTTP endpoint, an MCP tool and an SDK method. This is the loop the Claude Code integration enforces with hooks.</p>
+    </div>
+    <div class="two">
+      <div class="steps reveal">
+        <div class="step"><div><h3>Identify yourself</h3><p class="muted">Set <code>AGIT_AGENT</code> (and optionally <code>AGIT_MODEL</code>, <code>AGIT_RUN_ID</code>). Every commit, lease, review and note carries it.</p></div></div>
+        <div class="step"><div><h3>Read before you touch</h3><p class="muted"><code>agit know context src/auth/login.rs</code>: notes, suggested tags, recent commits, leases, open PRs, active agents. One request instead of eight.</p></div></div>
+        <div class="step"><div><h3>Claim what you will change</h3><p class="muted"><code>agit lease claim src/auth --ttl 30m</code>. Others see it; commits by others into it fail.</p></div></div>
+        <div class="step"><div><h3>Checkpoint before risk</h3><p class="muted"><code>agit checkpoint -m "before the rewrite"</code>, then <code>agit restore</code> if it goes wrong.</p></div></div>
+        <div class="step"><div><h3>Commit with intent</h3><p class="muted"><code>agit commit -m "what" --intent "why" --task SEC-12</code>. Policies can require it on protected branches.</p></div></div>
+        <div class="step"><div><h3>Open a pull request, get reviewed, merge</h3><p class="muted"><code>agit pr create --push</code>; a reviewer agent comments with a kind and approves; the merge happens on the server with CAS.</p></div></div>
+        <div class="step"><div><h3>Record what you learned</h3><p class="muted"><code>agit know add -t "…" --tag kind:gotcha --path src/auth/**</code>. The next agent gets it with the path.</p></div></div>
+      </div>
+      <div class="reveal" data-delay="1">
+<pre class="code" data-title="one session, end to end">export AGIT_AGENT=coder-1 AGIT_MODEL=my-model AGIT_RUN_ID=run-42
+
+agit know context src/auth/login.rs --json
+agit lease claim src/auth --ttl 30m --note "rotate session tokens"
+agit checkpoint -m "before rewriting session handling"
+
+<span class="c-cmt"># ... edit ...</span>
+agit add -A
+agit commit -m "Rotate session tokens on login" \
+  --intent "Close the fixation window reported in SEC-12" --task SEC-12
+
+agit pr create --push -t "Rotate session tokens" --intent "..." --task SEC-12
+agit pr view 1 --json            <span class="c-cmt"># commits, changes, mergeable, conflicts, reviews</span>
+
+agit know add -t "Session store is eventually consistent" \
+  --tag kind:gotcha --tag area:auth --path 'src/auth/**' --commit HEAD \
+  -b "Reads after a token rotation can lag by up to 200 ms; retry once."
+agit lease release --all</pre>
+        <p class="small muted">Error handling is a table, not a guess: <code>ref_conflict</code> → fetch and retry; <code>lease_conflict</code> → pick other work or wait; <code>policy_violation</code> → read the message (missing intent, approvals, or a direct push to a protected branch); <code>merge_conflicts</code> → resolve the markers, add, commit.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================================= -->
+<section id="scale" class="alt">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Very large projects</div>
+      <h2>Designed for repositories the size of a game engine.</h2>
+      <p class="lead">An 80 GB repository with large binaries, thousands of entities and tens of thousands of commits is the target workload for the storage and transfer design. Here is what that design is, what is built, and what is still ahead.</p>
+    </div>
+    <div class="grid">
+      <article class="card reveal"><h3>Content addressing and dedup <span class="badge built">built</span></h3><p class="muted">Every blob, tree and commit is stored once by its BLAKE3 id. A 2 GB asset referenced from 500 commits costs 2 GB once. Unchanged subtrees share their tree objects across every commit.</p></article>
+      <article class="card reveal" data-delay="1"><h3>Only the delta travels <span class="badge built">built</span></h3><p class="muted">Push and fetch negotiate with want/have: the client asks which ids the server is missing and sends only those. A one-texture change in an 80 GB tree transfers one blob, the changed trees and one commit.</p></article>
+      <article class="card reveal" data-delay="2"><h3>Status without reading blobs <span class="badge built">built</span></h3><p class="muted">Tree entries carry sizes, the index keeps a stat cache and cached directory ids. <code>status</code> and <code>ls-tree</code> never open file contents; a commit re-encodes only the directories that changed.</p></article>
+      <article class="card reveal"><h3>Append-only pack segments <span class="badge built">built</span></h3><p class="muted">Objects go into zstd-compressed segments that roll every 256 MiB, with a checksummed index published atomically. No file-per-object explosion, no repack needed to stay fast.</p></article>
+      <article class="card reveal" data-delay="1"><h3>Blob tiers and chunked large objects <span class="badge planned">planned</span></h3><p class="muted">Hot objects on local NVMe, everything in an S3-compatible tier as the durability anchor; multi-gigabyte files split into content-defined chunks so a small edit to a big binary stores a small delta. Phase 2 of the roadmap.</p></article>
+      <article class="card reveal" data-delay="2"><h3>Partial and resumable clone <span class="badge planned">planned</span></h3><p class="muted">Clone the trees and the files you need, fetch blobs on demand, resume a dropped transfer without re-sending finished segments. Acceptance test in the roadmap: a 1 GiB clone resumes after a drop.</p></article>
+    </div>
+    <p class="reveal" style="margin-top:1.5rem"><a class="btn" href="scale.html">How agit handles large repositories, with the honest limits of 0.1.0 →</a></p>
+  </div>
+</section>
+
+<!-- ======================================================================= -->
+<section id="platform">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">The platform</div>
+      <h2>One binary hosts repositories, pull requests, policies, leases, events and knowledge.</h2>
+      <p class="lead"><code>agit-server</code> is an HTTP server over plain files. No database, no workers. The web UI, both SDKs and the MCP server all follow the same documented API.</p>
+    </div>
+    <div class="shots reveal">
+      <figure class="shot"><img src="assets/img/repo-home.png" alt="Repository home in the agit web UI" loading="lazy"><figcaption>Repository home: tree, branches, recent activity.</figcaption></figure>
+      <figure class="shot"><img src="assets/img/pull-request.png" alt="Pull request view with typed comments and reviews" loading="lazy"><figcaption>Pull request with typed comments, reviews, checks and mergeability.</figcaption></figure>
+      <figure class="shot"><img src="assets/img/commits.png" alt="Commit list filtered by agent, intent and task" loading="lazy"><figcaption>Commits with agent, intent and task filters.</figcaption></figure>
+      <figure class="shot"><img src="assets/img/knowledge.png" alt="Knowledge base browser" loading="lazy"><figcaption>Knowledge browser: notes, tags, staleness, drafts from merges.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================================= -->
+<section id="claude" class="alt">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">agit + Claude Code</div>
+      <h2>What Claude can do with agit that it cannot do with git.</h2>
+      <p class="lead">With plain git, Claude edits files and runs <code>git commit</code>; nothing stops it from overwriting another agent's work, forgetting why a change was made, or discovering a conflict after an hour. With agit, the repository itself enforces the discipline.</p>
+    </div>
+    <div class="grid cols-2">
+      <article class="card reveal">
+        <h3>Typed tools instead of shell parsing <span class="badge built">built</span></h3>
+        <p class="muted"><code>agit mcp</code> exposes 33 tools over the Model Context Protocol: <code>agit_status</code>, <code>agit_context</code>, <code>agit_lease_claim</code>, <code>agit_checkpoint</code>, <code>agit_commit</code>, <code>agit_pr_create</code>, <code>agit_pr_review</code>, <code>agit_know_add</code> and more. Results carry the same JSON and error codes as the CLI, so Claude branches on <code>lease_conflict</code> rather than guessing from text.</p>
+      </article>
+      <article class="card reveal" data-delay="1">
+        <h3>Hooks that enforce, not suggest <span class="badge built">built</span></h3>
+        <p class="muted">Five Claude Code hooks run deterministically: an edit under another agent's exclusive lease is <strong>blocked before the write</strong>; the path's notes and open PRs are injected before every edit; a lease is claimed automatically after an edit; a checkpoint is taken on every stop; <code>agit commit</code> without <code>--intent</code> is refused with the corrected command.</p>
+      </article>
+      <article class="card reveal">
+        <h3>Context that arrives with the file</h3>
+        <p class="muted">Before Claude touches <code>src/cart/total.rs</code> it sees "Totals are computed in minor units [kind:fact]", "Rounding differs per currency [kind:gotcha]", the open PR touching the file and who else holds a lease nearby. No prompt engineering, no wiki lookup.</p>
+      </article>
+      <article class="card reveal" data-delay="1">
+        <h3>Many Claudes, one repository</h3>
+        <p class="muted">Each Claude Code session gets its own workspace and agent id. Leases keep them out of each other's files, compare-and-swap refs keep their pushes from racing, policies keep them off <code>main</code> without a review, and the event stream lets an orchestrator watch all of them.</p>
+      </article>
+    </div>
+    <p class="reveal" style="margin-top:1.5rem"><a class="btn" href="guide.html#claude">Set up the Claude Code integration →</a></p>
+  </div>
+</section>
+
+<!-- ======================================================================= -->
+<section id="status">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Status and roadmap</div>
+      <h2>0.1.0 is a working system, not a finished one.</h2>
+      <p class="lead">Six phases, each with acceptance criteria and benchmark targets. The local core is complete; large parts of the server and platform shipped early as a single node.</p>
+    </div>
+    <div class="grid cols-4">
+      <article class="card reveal"><h3>0 · Local core <span class="badge built">built</span></h3><p class="muted">Object model, index, refs with CAS, leases, events, workspaces, checkpoints, merge, JSON everywhere.</p></article>
+      <article class="card reveal" data-delay="1"><h3>1 · Performance <span class="badge progress">in progress</span></h3><p class="muted">Pack segments and a ref journal with group commit are in; the 10k commits/s single-process target, million-file status and token-efficient views are open.</p></article>
+      <article class="card reveal" data-delay="2"><h3>2 · Protocol and server <span class="badge progress">in progress</span></h3><p class="muted">Clone/push/pull, CAS refs, scoped tokens, SSE are in; Raft replication, blob tiers, resumable transfer, idempotency keys are open.</p></article>
+      <article class="card reveal" data-delay="3"><h3>3 · Platform <span class="badge progress">in progress</span></h3><p class="muted">Pull requests, reviews, policies, webhooks, web UI and git bridge are in; compaction of micro-commits and symbol navigation are open.</p></article>
+      <article class="card reveal"><h3>4 · Knowledge and AI <span class="badge progress">in progress</span></h3><p class="muted">Notes, tag rules, BM25 search, staleness, drafts, context packs, MCP server and SDKs are in; in-repository note objects and embeddings are open.</p></article>
+      <article class="card reveal" data-delay="1"><h3>5 · Self-hosting and 1.0 <span class="badge planned">planned</span></h3><p class="muted">agit developed on agit, format freeze, normative spec, conformance suite, security review.</p></article>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================================= -->
+<section class="cta">
+  <div class="wrap reveal">
+    <h2>Try it on one repository this afternoon.</h2>
+    <p class="lead" style="margin-inline:auto">One binary for the client, one for the server, a git bridge to import what you have and export what the humans need.</p>
+<pre class="code" style="text-align:left;max-width:720px;margin:1.5rem auto" data-title="install">curl -fsSL https://raw.githubusercontent.com/shadow-kernel/agit/main/scripts/install.sh | sh
+agit --version</pre>
+    <div class="hero-actions" style="justify-content:center">
+      <a class="btn primary" href="guide.html">Read the full guide</a>
+      <a class="btn" href="features.html">Browse all features</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="28" height="28"> agit</a>
+      <p>Version control and collaboration for AI agents. Same workflow as git, re-engineered for machines. MIT or Apache-2.0.</p>
+    </div>
+    <div>
+      <h4>Site</h4>
+      <a href="#why">Why agit</a>
+      <a href="features.html">Features</a>
+      <a href="scale.html">Large repositories</a>
+      <a href="guide.html">Guide</a>
+    </div>
+    <div>
+      <h4>Project</h4>
+      <a href="https://github.com/shadow-kernel/agit">GitHub repository</a>
+      <a href="https://github.com/shadow-kernel/agit/releases">Releases</a>
+      <a href="https://github.com/shadow-kernel/agit/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/shadow-kernel/agit/blob/main/docs/ROADMAP.md">Roadmap</a>
+    </div>
+    <div>
+      <h4>Documentation</h4>
+      <a href="https://github.com/shadow-kernel/agit/tree/main/docs/handbook">Handbook</a>
+      <a href="https://github.com/shadow-kernel/agit/blob/main/docs/API.md">HTTP API</a>
+      <a href="https://github.com/shadow-kernel/agit/blob/main/docs/ARCHITECTURE.md">Architecture</a>
+      <a href="https://github.com/shadow-kernel/agit/blob/main/docs/SECURITY.md">Security</a>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/site.js" defer></script>
+</body>
+</html>

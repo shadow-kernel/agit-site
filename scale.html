@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>agit for very large repositories</title>
+  <meta name="description" content="How agit handles repositories the size of a game engine: content addressing, dedup, zstd pack segments, want/have transfer, sizes in trees, submodules, and the honest limits and roadmap for 80 GB repositories with large binaries.">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <script>try { if (localStorage.getItem("agit.theme") === "light" || (!localStorage.getItem("agit.theme") && matchMedia("(prefers-color-scheme: light)").matches)) document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<nav class="nav" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="28" height="28"> agit</a>
+    <button class="icon-btn menu-btn" data-menu aria-expanded="false" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="nav-links">
+      <a href="index.html#why">Why agit</a>
+      <a href="features.html">Features</a>
+      <a href="scale.html">Large repos</a>
+      <a href="guide.html">Guide</a>
+      <a href="guide.html#claude">Claude Code</a>
+      <button class="icon-btn" data-theme-toggle aria-label="Switch theme" title="Theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9c-4.97 0-9-4.03-9-9Z"/></svg></button>
+      <a class="btn sm" href="https://github.com/shadow-kernel/agit">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+<header class="hero" style="padding-bottom:1rem">
+  <div class="blobs" aria-hidden="true"><span class="blob a"></span><span class="blob b"></span></div>
+  <div class="wrap" style="grid-template-columns:1fr">
+    <div>
+      <div class="eyebrow">Very large projects</div>
+      <h1 style="font-size:clamp(2rem,4.5vw,3.4rem)">Repositories the size of a <span class="grad">game engine</span>.</h1>
+      <p class="lead">Tens of gigabytes of textures, meshes, audio and generated entities next to a few million lines of code, touched by dozens of agents at once. This page explains how agit's storage and transfer are designed for that workload, which parts are built in 0.1.0, which are on the roadmap, and what to do today while they land.</p>
+      <div class="legend"><span class="badge built">built</span> ships in 0.1.0 <span class="badge progress">in progress</span> on <code>main</code> <span class="badge planned">planned</span> designed in the RFCs, not implemented</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap docs">
+  <aside class="toc" data-toc aria-label="On this page"><h4>On this page</h4></aside>
+  <article class="prose">
+
+    <h2 id="two-kinds">Two kinds of large</h2>
+    <p>An 80 GB game repository is large in two independent ways, and they need different answers.</p>
+    <div class="grid cols-2">
+      <div class="card"><h3>Large in objects</h3><p class="muted">Hundreds of thousands of files, deep directory trees, tens of thousands of commits, many branches. The cost drivers are <code>status</code>, <code>add</code>, <code>commit</code>, listing and history walks. The answer is an object model where the cost of an operation is proportional to the change, not to the repository.</p></div>
+      <div class="card"><h3>Large in bytes</h3><p class="muted">Individual files of hundreds of megabytes or several gigabytes: baked lightmaps, cinematics, packed asset bundles, ML checkpoints. The cost drivers are hashing, compression, transfer and disk. The answer is content addressing with dedup, cheap hashing, segment storage and, ahead, chunking and tiered blob storage.</p></div>
+    </div>
+
+    <h2 id="storage">Storage model</h2>
+    <p>agit is content-addressed like git, with a different engine underneath.</p>
+    <ul>
+      <li><strong>BLAKE3 ids</strong> <span class="badge built">built</span>. An object id is the BLAKE3-256 hash of a one-byte kind tag plus the payload. BLAKE3 is several times faster than SHA-1 and SHA-256 on one core and agit switches to multi-threaded hashing above 128 KiB, so a 4 GB file hashes at memory bandwidth on a laptop. Hashing stops being the bottleneck.</li>
+      <li><strong>One copy per content</strong> <span class="badge built">built</span>. A blob referenced from five hundred commits is stored once. Renaming or moving a 2 GB asset stores a new tree entry and nothing else. Identical files in different directories share one blob.</li>
+      <li><strong>Trees with sizes</strong> <span class="badge built">built</span>. Each tree entry carries mode, id, size and name in a binary <code>AGT1</code> record. <code>status</code>, <code>ls-tree</code>, the web UI and the <code>context</code> endpoint never open a blob to learn how big it is.</li>
+      <li><strong>Append-only pack segments</strong> <span class="badge built">built</span>. Objects are zstd-compressed and appended to a segment owned by the writing process; a segment is sealed at 1,024 objects or 256 MiB and a checksummed index (<code>AGX1</code>) is published atomically on flush. Writing a million objects does not create a million files, and nothing needs a repack to stay fast.</li>
+      <li><strong>Verify on read</strong> <span class="badge built">built</span>. Every object is re-hashed when loaded. A flipped bit on a 50 GB volume is reported as <code>hash_mismatch</code>, never served as content. <code>agit fsck</code> checks a repository end to end.</li>
+      <li><strong>Index with stat cache and tree cache</strong> <span class="badge built">built</span>. The <code>AGI2</code> index remembers mtime, size and inode per path and the id of every directory tree. A commit that changes one file re-encodes the three directories on its path and reuses every other cached tree id. <code>write_tree</code> on a 2,000-file tree costs 0.3 ms when nothing changed.</li>
+      <li><strong>Delta compression</strong> <span class="badge planned">planned</span>. Segments compress each object on its own today. Content-defined chunking for large blobs (below) is the planned path to small deltas for small edits of big binaries; git-style delta chains between versions of text files are a later optimisation.</li>
+    </ul>
+
+    <div class="diagram">
+      <svg viewBox="0 0 980 330" role="img" aria-labelledby="dg1">
+        <title id="dg1">Storage path: working tree to index to pack segments, with planned blob tiers on the server</title>
+        <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5 0 10z" fill="currentColor" style="color:var(--text-3)"/></marker></defs>
+        <text class="tag" x="20" y="24">client</text>
+        <rect class="box" x="20" y="40" width="200" height="90"/>
+        <text x="36" y="66" font-weight="600">Working tree</text>
+        <text class="mono" x="36" y="88">500k files · 80 GB</text>
+        <text class="mono" x="36" y="108">.agitignore honored</text>
+
+        <rect class="box hot" x="260" y="40" width="200" height="90"/>
+        <text x="276" y="66" font-weight="600">Index (AGI2)</text>
+        <text class="mono" x="276" y="88">stat cache per path</text>
+        <text class="mono" x="276" y="108">cached tree ids</text>
+
+        <rect class="box hot" x="500" y="40" width="200" height="90"/>
+        <text x="516" y="66" font-weight="600">Pack segments</text>
+        <text class="mono" x="516" y="88">zstd · BLAKE3 ids</text>
+        <text class="mono" x="516" y="108">256 MiB roll · AGX1 index</text>
+
+        <path class="arrow" d="M220 85 H258"/>
+        <path class="arrow" d="M460 85 H498"/>
+        <text class="mono" x="224" y="75">lstat</text>
+        <text class="mono" x="462" y="75">changed</text>
+
+        <text class="tag" x="20" y="184">transfer</text>
+        <rect class="box" x="20" y="200" width="680" height="54"/>
+        <text x="36" y="222" font-weight="600">want / have negotiation</text>
+        <text class="mono" x="36" y="242">POST objects/missing → only ids the other side lacks → object stream (kind | len | payload)</text>
+        <path class="arrow" d="M600 130 V198"/>
+
+        <text class="tag" x="760" y="24">server</text>
+        <rect class="box hot" x="760" y="40" width="200" height="90"/>
+        <text x="776" y="66" font-weight="600">agit-server</text>
+        <text class="mono" x="776" y="88">same segment format</text>
+        <text class="mono" x="776" y="108">CAS refs · events · PRs</text>
+        <path class="arrow" d="M700 227 H740 V85 H758"/>
+
+        <rect class="box plan" x="760" y="160" width="200" height="60"/>
+        <text x="776" y="184" font-weight="600">Hot tier (NVMe)</text>
+        <text class="mono" x="776" y="204">recent objects · planned</text>
+        <rect class="box plan" x="760" y="240" width="200" height="60"/>
+        <text x="776" y="264" font-weight="600">Blob tier (S3)</text>
+        <text class="mono" x="776" y="284">all objects · dedup · planned</text>
+        <path class="arrow" d="M860 130 V158"/>
+        <path class="arrow" d="M860 220 V238"/>
+
+        <text class="mono" x="20" y="300">built: solid border · planned: dashed border</text>
+      </svg>
+    </div>
+
+    <h2 id="transfer">Transfer: only the delta travels</h2>
+    <p>Push and fetch are two-step. The client sends the ids reachable from what it wants to push; the server answers with the subset it is missing; only those objects are streamed. Fetch works the same way with <code>wants</code> and <code>haves</code>. For an 80 GB tree where one texture and one script changed, a push moves one blob, the trees on its path, one commit and a compare-and-swap ref update. <span class="badge built">built</span></p>
+    <p>Objects on the wire use the same record shape as pack segments, so the server appends what it receives without re-encoding. <span class="badge built">built</span></p>
+    <p>What is still ahead for transfer:</p>
+    <ul>
+      <li><strong>Resumable uploads and idempotency keys</strong> <span class="badge planned">planned</span>: a push retried after a dropped connection continues where it stopped and applies exactly once. Roadmap acceptance test: a 1 GiB clone resumes without re-transferring completed segments.</li>
+      <li><strong>Partial clone and on-demand blobs</strong> <span class="badge planned">planned</span>: clone the commit graph and trees, fetch blobs when a path is checked out. An artist's agent working on <code>assets/characters/</code> never downloads <code>assets/cinematics/</code>.</li>
+      <li><strong>Streaming bodies</strong> <span class="badge progress">in progress</span>: today a fetch response is read into memory on the client before it is unpacked, which bounds a single transfer by available RAM (see the limits below).</li>
+    </ul>
+
+    <h2 id="big-files">Large files</h2>
+    <p>Content addressing handles large files correctly today; the planned work makes them cheap.</p>
+    <table>
+      <thead><tr><th>Concern</th><th>Today (0.1.0)</th><th>Planned</th></tr></thead>
+      <tbody>
+        <tr><td>Hashing a 4 GB file</td><td>BLAKE3, multi-threaded; limited by disk read speed <span class="badge built">built</span></td><td>unchanged</td></tr>
+        <tr><td>Storing it twice in history</td><td>stored once by content <span class="badge built">built</span></td><td>unchanged</td></tr>
+        <tr><td>Editing 1 MB inside it</td><td>a second full copy, zstd-compressed <span class="badge built">built</span></td><td>content-defined chunking: only the changed chunks are new <span class="badge planned">planned</span></td></tr>
+        <tr><td>Maximum object size</td><td>4 GiB per object (32-bit length fields in segment records and wire frames)</td><td>chunked objects remove the cap <span class="badge planned">planned</span></td></tr>
+        <tr><td>Memory while adding or pushing</td><td>the whole object is held in memory while hashing, compressing and streaming</td><td>streaming hash and compress; chunked transfer <span class="badge planned">planned</span></td></tr>
+        <tr><td>Where blobs live on the server</td><td>local pack segments under the data directory <span class="badge built">built</span></td><td>hot NVMe tier plus S3-compatible blob tier with cross-repository dedup <span class="badge planned">planned</span></td></tr>
+        <tr><td>Binary merge conflicts</td><td>detected (<code>binary</code> conflict kind), ours kept, reported in JSON <span class="badge built">built</span></td><td>lease-first workflow makes them rare (below)</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="workflow">Workflows that keep a large team out of trouble</h2>
+    <p>Most pain in big repositories is not storage, it is coordination. These are built today.</p>
+    <ul>
+      <li><strong>Leases on asset directories</strong> <span class="badge built">built</span>. Binary files do not merge. An agent (or a human through an agent) claims <code>assets/levels/forest/**</code> for an hour; every other commit into it is refused with <code>lease_conflict</code> before any work is wasted. Leases are advisory, time-limited and visible on the lease board.</li>
+      <li><strong>Workspaces per agent</strong> <span class="badge built">built</span>. Twenty agents, twenty working directories, one object store on the build machine. No duplicated 80 GB checkouts per agent.</li>
+      <li><strong>Checkpoints instead of WIP commits</strong> <span class="badge built">built</span>. Snapshot the whole tree before a destructive build step and restore it in one command, without polluting history with half-baked states.</li>
+      <li><strong>Submodules to split the monorepo</strong> <span class="badge built">built</span>. Engine, tools and content as separate repositories pinned by commit through <code>.agitmodules</code>. Agents working on tools never hash the content tree.</li>
+      <li><strong>Policies on protected branches</strong> <span class="badge built">built</span>. <code>max_files_per_commit</code> keeps an agent from committing a 40,000-file regeneration by accident; required intent and reviews keep <code>main</code> explainable.</li>
+      <li><strong>Server-side compaction</strong> <span class="badge planned">planned</span>. Runs of micro-commits are collapsed into human-sized commits with provenance kept in <code>meta</code>, so a year of agent activity does not become a million-commit history walk.</li>
+    </ul>
+
+    <h2 id="limits">Honest limits in 0.1.0</h2>
+    <div class="callout warn">
+      <strong>Read this before pointing agit at 80 GB today.</strong>
+      <p>The design above is the target. The 0.1.0 implementation has the following concrete limits; each is tracked in the roadmap, and none of them changes the on-disk object model.</p>
+    </div>
+    <table>
+      <thead><tr><th>Limit</th><th>Why</th><th>What to do today</th></tr></thead>
+      <tbody>
+        <tr><td>Objects up to 4 GiB each</td><td>segment records and wire frames use 32-bit lengths</td><td>split archives above 4 GiB; keep cinematics as per-shot files</td></tr>
+        <tr><td>Whole object in memory on <code>add</code>, <code>push</code>, <code>fetch</code></td><td>blobs are read, hashed, compressed and streamed as one buffer; a fetch response is buffered before unpacking</td><td>size the agent's machine for the largest asset plus the largest expected fetch; push often so each transfer stays small</td></tr>
+        <tr><td>No chunking or delta compression</td><td>each object version is a full zstd copy</td><td>fine for assets that change rarely; for frequently edited large binaries expect history to grow by the file size per change until chunking lands</td></tr>
+        <tr><td>No partial clone or sparse checkout</td><td>a clone fetches every object reachable from the requested branches</td><td>split by submodule; give agents clones of the repositories they work in, not the whole engine</td></tr>
+        <tr><td>Single server node</td><td>everything is files under one data directory; replication, sharding and blob tiers are Phase 2</td><td>fast NVMe for the data directory, nightly backups of the directory, a reverse proxy with no body-size limit</td></tr>
+        <tr><td><code>status</code> cost grows with file count</td><td>warm stat cache measured at about 4 µs per file (8 ms for 2,000 files); the million-file target (&lt; 500 ms) needs the parallel walk and a persisted walk cache from Phase 1</td><td>ignore build output and caches in <code>.agitignore</code>; agents call <code>status --json</code> on the workspace they own</td></tr>
+        <tr><td>No LFS-style pointer files</td><td>agit's answer to LFS is tiers and partial clone, not pointers</td><td>keep truly enormous raw sources (uncompressed captures) outside version control until blob tiers land</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="roadmap">Roadmap items that matter for scale</h2>
+    <table>
+      <thead><tr><th>Phase</th><th>Deliverable</th><th>Target (not yet measured)</th></tr></thead>
+      <tbody>
+        <tr><td>1 · Performance</td><td>parallel <code>status</code> and <code>add</code> with a work-stealing walk; journal with group commit; append-only pack index; <code>agit squash</code></td><td><code>status</code> on 1,000,000 files, warm cache, &lt; 500 ms; <code>add</code> of 100,000 files totalling 1 GiB within 1.2× of git</td></tr>
+        <tr><td>2 · Protocol and server</td><td>streaming transfer, resumable uploads, idempotency keys, local pack tier plus S3-compatible blob tier with cross-repository dedup, sharding by repository, Raft log</td><td>clone of a 1 GiB repository over 1 Gbit/s at &gt; 80% of link bandwidth; 10,000 to 20,000 commits/s per hot repository</td></tr>
+        <tr><td>3 · Platform</td><td>server-side compaction of micro-commit runs; git bridge round trip on large projects</td><td>git import of a 100k-commit repository within 2× of <code>git clone</code> wall time</td></tr>
+        <tr><td>5 · 1.0</td><td>format freeze with a compatibility policy; the full benchmark suite re-run and published</td><td>a 1.0 repository opens unchanged in every 1.x release</td></tr>
+      </tbody>
+    </table>
+    <p>Measured numbers live only in <a href="https://github.com/shadow-kernel/agit/blob/main/docs/BENCHMARKS.md">docs/BENCHMARKS.md</a>, with hardware and commands. Everything in the table above is a target until it appears there.</p>
+
+    <h2 id="sizing">Sizing a server for a large project</h2>
+    <dl class="kv">
+      <dt>disk</dt><dd>NVMe for <code>AGIT_DATA_DIR</code>; plan for the deduplicated size of all repositories plus history growth. Pack segments are append-only, so sequential write throughput matters more than IOPS.</dd>
+      <dt>memory</dt><dd>the server holds objects in memory while receiving and serving them; give it headroom for the largest objects times concurrent transfers.</dd>
+      <dt>durability</dt><dd><code>AGIT_FSYNC=refs</code> (default) fsyncs ref updates and the journal; <code>all</code> also fsyncs every object write at a throughput cost; <code>none</code> only for throwaway servers.</dd>
+      <dt>reverse proxy</dt><dd>no request body limit (<code>client_max_body_size 0</code> in nginx), buffering off and long read timeouts for the SSE event stream, TLS terminated there.</dd>
+      <dt>backups</dt><dd>the data directory is the only state; snapshot it nightly and test a restore. Encrypt backups: webhook secrets and notes are inside.</dd>
+      <dt>network</dt><dd>keep agents close to the server; a push of large assets is one HTTP request per batch, so latency matters less than bandwidth.</dd>
+    </dl>
+
+    <h2 id="try">Try it on a real asset tree</h2>
+<pre class="code" data-title="import an existing game repository">agit git import /path/to/engine --into engine --json     <span class="c-cmt"># full history, trailers become intent/task</span>
+cd engine
+agit fsck --json                                        <span class="c-cmt"># every object re-hashed</span>
+agit status --json                                      <span class="c-cmt"># sizes from the tree, no blob reads</span>
+agit lease claim 'assets/levels/**' --ttl 2h --note "relight forest"
+agit remote add origin https://agit.example.com/api/v1/repos/engine
+agit push --create                                      <span class="c-cmt"># only objects the server lacks</span></pre>
+    <p>Then watch <code>agit events --follow</code> on the server side while a second agent tries to commit into <code>assets/levels/</code> and is refused in milliseconds.</p>
+    <p><a class="btn" href="guide.html">Full installation and server guide →</a> <a class="btn ghost" href="features.html">All features →</a></p>
+  </article>
+</div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><a class="brand" href="./"><img src="assets/logo.svg" alt="" width="28" height="28"> agit</a><p>Version control and collaboration for AI agents. MIT or Apache-2.0.</p></div>
+    <div><h4>Site</h4><a href="index.html#why">Why agit</a><a href="features.html">Features</a><a href="scale.html">Large repositories</a><a href="guide.html">Guide</a></div>
+    <div><h4>Project</h4><a href="https://github.com/shadow-kernel/agit">GitHub repository</a><a href="https://github.com/shadow-kernel/agit/releases">Releases</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/ROADMAP.md">Roadmap</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/BENCHMARKS.md">Benchmarks</a></div>
+    <div><h4>Documentation</h4><a href="https://github.com/shadow-kernel/agit/tree/main/docs/handbook">Handbook</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/API.md">HTTP API</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/ARCHITECTURE.md">Architecture</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/rfcs/0004-throughput.md">RFC 0004: throughput</a></div>
+  </div>
+</footer>
+<script src="assets/site.js" defer></script>
+</body>
+</html>

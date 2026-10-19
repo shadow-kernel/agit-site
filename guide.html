@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>agit guide: installation, server, client, agents</title>
+  <meta name="description" content="The complete agit guide: install the CLI and server, run and harden agit-server, use the client like git, connect to a server, open pull requests, set up the MCP server and Claude Code hooks, use the SDKs, troubleshoot.">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <script>try { if (localStorage.getItem("agit.theme") === "light" || (!localStorage.getItem("agit.theme") && matchMedia("(prefers-color-scheme: light)").matches)) document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<nav class="nav" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="28" height="28"> agit</a>
+    <button class="icon-btn menu-btn" data-menu aria-expanded="false" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="nav-links">
+      <a href="index.html#why">Why agit</a>
+      <a href="features.html">Features</a>
+      <a href="scale.html">Large repos</a>
+      <a href="guide.html">Guide</a>
+      <a href="guide.html#claude">Claude Code</a>
+      <button class="icon-btn" data-theme-toggle aria-label="Switch theme" title="Theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9c-4.97 0-9-4.03-9-9Z"/></svg></button>
+      <a class="btn sm" href="https://github.com/shadow-kernel/agit">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+<header class="hero" style="padding-bottom:1rem">
+  <div class="blobs" aria-hidden="true"><span class="blob b"></span><span class="blob c"></span></div>
+  <div class="wrap" style="grid-template-columns:1fr">
+    <div>
+      <div class="eyebrow">The guide</div>
+      <h1 style="font-size:clamp(2rem,4.5vw,3.4rem)">Install, run a server, <span class="grad">use it like git</span>, hand it to your agents.</h1>
+      <p class="lead">Everything from the first binary to a hardened server with policies, the MCP server and Claude Code hooks. Commands are copied from real sessions against agit 0.1.0; long ids are shortened.</p>
+      <div class="grid cols-4" style="margin-top:1.5rem">
+        <div class="card"><h3><a href="#install" style="color:inherit">Developer</a></h3><p class="muted small"><a href="#install">Install</a>, then <a href="#client">use the client</a> exactly like git, with JSON when you want it.</p></div>
+        <div class="card"><h3><a href="#server" style="color:inherit">Operator</a></h3><p class="muted small">Run <a href="#server">agit-server</a>: tokens, policies, Docker, systemd, TLS, backups.</p></div>
+        <div class="card"><h3><a href="#agents" style="color:inherit">Agent author</a></h3><p class="muted small">The <a href="#agent-loop">loop</a>, the <a href="#mcp">MCP server</a>, <a href="#claude">Claude Code hooks</a>, Python and TypeScript <a href="#sdks">SDKs</a>.</p></div>
+        <div class="card"><h3><a href="scale.html" style="color:inherit">Large projects</a></h3><p class="muted small">What to expect with <a href="scale.html">tens of gigabytes</a> and big binaries today.</p></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap docs">
+  <aside class="toc" data-toc aria-label="On this page"><h4>On this page</h4></aside>
+  <article class="prose">
+
+    <!-- ================================================================ -->
+    <h2 id="install">1. Installation</h2>
+    <p>agit ships as two static binaries: <code>agit</code> (the CLI, which also contains the MCP server and the git bridge) and <code>agit-server</code>. Pick one method. All of them end with <code>agit --version</code> printing <code>agit 0.1.0</code>.</p>
+
+    <div class="tabs">
+      <div class="tablist" role="tablist">
+        <button role="tab">Installer script</button>
+        <button role="tab">From source (cargo)</button>
+        <button role="tab">Docker</button>
+        <button role="tab">Homebrew</button>
+        <button role="tab">Windows</button>
+      </div>
+      <div class="tabpanel" role="tabpanel">
+        <p>Downloads <code>agit-&lt;version&gt;-&lt;target&gt;.tar.gz</code> from the GitHub release, verifies it against the published <code>.sha256</code> and installs both binaries into <code>~/.local/bin</code> (or <code>/usr/local/bin</code> as root). macOS arm64 and x86_64, Linux x86_64 and aarch64.</p>
+<pre class="code">curl -fsSL https://raw.githubusercontent.com/shadow-kernel/agit/main/scripts/install.sh | sh
+agit --version</pre>
+        <p class="small muted">Options: <code>--version v0.1.0</code>, <code>--prefix /usr/local</code> (with <code>sudo sh -s --</code>), <code>--bin-dir DIR</code>, <code>--dry-run</code>, <code>--no-verify</code>. Each has an environment variable (<code>AGIT_VERSION</code>, <code>AGIT_PREFIX</code>, <code>AGIT_BIN_DIR</code>) for <code>curl | sh</code> use. Make sure <code>~/.local/bin</code> is on your <code>PATH</code>.</p>
+      </div>
+      <div class="tabpanel" role="tabpanel" hidden>
+        <p>Requires a Rust toolchain 1.89 or newer and <code>git</code> on <code>PATH</code> if you want <code>agit git import|export</code>. The first build compiles about 300 crates and takes a few minutes.</p>
+<pre class="code">git clone https://github.com/shadow-kernel/agit
+cd agit
+cargo build --release                      <span class="c-cmt"># both binaries in target/release</span>
+export PATH="$PWD/target/release:$PATH"
+agit --version
+
+<span class="c-cmt"># only the CLI, into ~/.cargo/bin</span>
+cargo install --path crates/agit-cli
+<span class="c-cmt"># only the server</span>
+cargo build --release -p agit-server
+<span class="c-cmt"># what CI runs: fmt, clippy -D warnings, all tests</span>
+make check</pre>
+      </div>
+      <div class="tabpanel" role="tabpanel" hidden>
+        <p>Images at <code>ghcr.io/shadow-kernel/agit</code> for <code>linux/amd64</code> and <code>linux/arm64</code>, tagged <code>&lt;version&gt;</code>, <code>&lt;major.minor&gt;</code> and <code>latest</code>. The image contains <code>agit-server</code>, the <code>agit</code> CLI, <code>git</code> and the built web UI, runs as uid 10001 and has a health check.</p>
+<pre class="code">docker run -d --name agit \
+  -p 127.0.0.1:7878:7878 \
+  -v agit-data:/data \
+  -e AGIT_SERVER_TOKEN="$(openssl rand -hex 32)" \
+  ghcr.io/shadow-kernel/agit:0.1.0
+docker logs -f agit
+curl -s http://127.0.0.1:7878/api/v1/health
+
+<span class="c-cmt"># the CLI from the image</span>
+docker exec agit agit --version
+docker run --rm -v "$PWD":/work -w /work --entrypoint agit ghcr.io/shadow-kernel/agit:0.1.0 status --json
+
+<span class="c-cmt"># build locally from a checkout</span>
+docker build -t agit:dev .</pre>
+      </div>
+      <div class="tabpanel" role="tabpanel" hidden>
+        <p><code>homebrew/agit.rb</code> is a formula template that the release workflow renders and attaches to each release as <code>agit.rb</code>. Publishing it to a tap is a manual step; until then install straight from the release asset.</p>
+<pre class="code">brew install --formula https://github.com/shadow-kernel/agit/releases/download/v0.1.0/agit.rb
+brew services start agit        <span class="c-cmt"># local server on 127.0.0.1:7878, data in $(brew --prefix)/var/agit</span></pre>
+      </div>
+      <div class="tabpanel" role="tabpanel" hidden>
+        <p>Download <code>agit-&lt;version&gt;-x86_64-pc-windows-msvc.zip</code> from the <a href="https://github.com/shadow-kernel/agit/releases">releases page</a>, unpack it and put the directory on <code>PATH</code>. The CLI and the server work on Windows; the Claude Code hooks are bash scripts and need WSL or Git Bash with <code>python3</code> or <code>jq</code>.</p>
+      </div>
+    </div>
+
+    <h3 id="first-checks">First checks and identity</h3>
+<pre class="code">agit --version                      <span class="c-cmt"># agit 0.1.0</span>
+agit-server --help                  <span class="c-cmt"># --data-dir, --listen, --token, --web-dir</span>
+
+<span class="c-cmt"># author identity: per repository ...</span>
+agit config user.name "Dana Developer"
+agit config user.email dana@example.com
+<span class="c-cmt"># ... or globally through the environment</span>
+export AGIT_AUTHOR_NAME="Dana Developer" AGIT_AUTHOR_EMAIL=dana@example.com</pre>
+    <p>Agents additionally set <code>AGIT_AGENT</code> (and optionally <code>AGIT_MODEL</code>, <code>AGIT_RUN_ID</code>, <code>AGIT_ON_BEHALF_OF</code>); see <a href="#agents">section 5</a>.</p>
+
+    <h3 id="optional">Optional components</h3>
+    <table>
+      <thead><tr><th>Component</th><th>Where</th><th>Needs</th></tr></thead>
+      <tbody>
+        <tr><td>Web UI</td><td><code>web/</code></td><td>Node 22 and pnpm (<code>cd web && pnpm install && pnpm build</code>), or the <code>agit-web-&lt;version&gt;.tar.gz</code> release asset; served with <code>agit-server --web-dir web/dist</code></td></tr>
+        <tr><td>Python SDK</td><td><code>sdk/python</code></td><td>Python 3.10+, <code>pip install -e sdk/python</code>, no runtime dependencies</td></tr>
+        <tr><td>TypeScript SDK</td><td><code>sdk/typescript</code></td><td>Node 18+, Deno or Bun; <code>@agit/sdk</code></td></tr>
+        <tr><td>MCP server</td><td>built into <code>agit</code></td><td>any MCP client; <code>agit mcp</code> runs over stdio</td></tr>
+        <tr><td>Claude Code hooks</td><td><code>integrations/claude-code/</code></td><td>bash 3.2+, <code>python3</code> or <code>jq</code>; <code>install.sh</code></td></tr>
+      </tbody>
+    </table>
+
+    <!-- ================================================================ -->
+    <h2 id="client">2. The client, used like git</h2>
+    <p>Every command below also accepts <code>--json</code> (or <code>AGIT_JSON=1</code>) and <code>-C &lt;dir&gt;</code>. The human output is shown where it is shorter.</p>
+
+    <h3 id="first-repo">Create a repository and commit</h3>
+<pre class="code">mkdir demo && cd demo
+agit init
+printf '# demo\n' > README.md
+mkdir src && printf 'fn main() {\n    println!("hello");\n}\n' > src/main.rs
+agit status
+agit add README.md src
+agit commit -m "Initial commit" --intent "Bootstrap the demo project" --task DEMO-1
+agit log
+agit status --json</pre>
+<pre class="code" data-title="agit status --json">{"ok":true,"result":{"workspace":"main","branch":"main","staged":[],"unstaged":[],"untracked":[],"conflicts":[],"merge_in_progress":false}}</pre>
+    <p><code>--intent</code> says why, <code>--task</code> links a ticket. Both are optional locally; server policies can require them, so it is a good habit from the first commit. A failed command is one JSON object and a non-zero exit code:</p>
+<pre class="code">$ agit commit --json -m "x"; echo "exit=$?"
+{"ok":false,"error":{"code":"nothing_to_commit","message":"nothing to commit","retryable":false,"details":null}}
+exit=1</pre>
+
+    <h3 id="branches">Branches, merges and conflicts</h3>
+<pre class="code">agit branch feature/greeting
+agit switch feature/greeting            <span class="c-cmt"># alias: checkout; -c creates</span>
+<span class="c-cmt"># edit src/main.rs ...</span>
+agit commit -a -m "Greet the world" --intent "Make the greeting friendlier" --task DEMO-2
+agit switch main
+<span class="c-cmt"># edit the same line differently ...</span>
+agit commit -a -m "Greet agit" --intent "Mention the tool" --task DEMO-3
+agit merge feature/greeting --json; echo "exit=$?"</pre>
+<pre class="code" data-title="merge with a conflict: exit 3, diff3 markers in the file">{"ok":true,"result":{"kind":"conflicts","tree":"84c98e13…","conflicts":[{"path":"src/main.rs","kind":"content","base":"da3d0fe7…","ours":"b5f319df…","theirs":"eb9b58f5…"}],"auto_merged":[]}}
+{"ok":false,"error":{"code":"merge_conflicts","message":"merge produced conflicts in 1 file(s)","retryable":false,"details":{"count":1}}}
+exit=3</pre>
+<pre class="code"><span class="c-cmt"># resolve the markers (they include the base version), then</span>
+agit add src/main.rs
+agit commit -m "Merge feature/greeting" --intent "Combine both greetings"
+agit log --graph --oneline
+agit merge --abort                      <span class="c-cmt"># at any point before that commit</span>
+agit diff --stat HEAD~2 HEAD
+agit diff --staged</pre>
+    <p>A fast-forward is reported as <code>{"kind":"fast_forward"}</code>, a real merge as <code>merged</code>, nothing to do as <code>already_up_to_date</code>; <code>--no-ff</code> forces a merge commit. <code>switch</code> refuses to overwrite local changes (<code>dirty_worktree</code>, exit 3) unless you pass <code>--force</code>. Renames are detected in <code>diff</code> and <code>show</code>.</p>
+
+    <h3 id="snapshots">Stash, checkpoints, restore</h3>
+<pre class="code">agit stash                              <span class="c-cmt"># includes untracked files</span>
+agit stash list
+agit stash pop
+
+agit checkpoint -m "before rewriting helper" --json
+<span class="c-cmt"># {"ok":true,"result":{"id":"4cc2e92e…","tree":"b37c8a4e…","previous":null,"changes_vs_head":2,"created":true}}</span>
+agit checkpoint --if-changed            <span class="c-cmt"># created:false when nothing changed</span>
+agit checkpoint list
+agit checkpoint restore 4cc2e92e…       <span class="c-cmt"># whole working tree, untracked files included</span>
+agit restore HEAD                       <span class="c-cmt"># discard all local changes</span></pre>
+    <p>Checkpoints live on <code>refs/checkpoints/&lt;workspace&gt;</code>, never show up in <code>agit log</code>, and <code>agit gc</code> expires them after 30 days by default.</p>
+
+    <h3 id="history">Blame, grep, reflog, reset, revert, cherry-pick, gc</h3>
+<pre class="code">agit blame src/main.rs                  <span class="c-cmt"># agent id shown instead of author when a commit has one</span>
+agit grep 'println' --json              <span class="c-cmt"># working tree; --rev HEAD~2 for a revision</span>
+agit reflog -n 3                        <span class="c-cmt"># every HEAD and branch move</span>
+agit reset --hard HEAD~1                <span class="c-cmt"># itself logged, so undoable with another reset</span>
+agit revert HEAD
+agit cherry-pick HEAD~1
+agit tag v0.1.0
+agit gc --dry-run --json                <span class="c-cmt"># unreachable objects older than the grace period, expired reflog and checkpoints</span>
+agit fsck</pre>
+    <p>Ignore rules come from <code>.agitignore</code> and <code>.gitignore</code>, both honored. <code>agit root --json</code> tells you the working directory, common directory, workspace and branch from anywhere inside a repository.</p>
+
+    <h3 id="git-bridge">Import from git, export to git</h3>
+<pre class="code">agit git import ../gitproj --into imported --json
+<span class="c-cmt"># {"ok":true,"result":{"commits":2,"trees":2,"blobs":1,"branches":["main"],"tags":[],"skipped_commits":0}}</span>
+agit -C imported log --json | jq '.result[0] | {message, intent, task, meta}'
+<span class="c-cmt"># Intent:/Task:/Agent:/Model: trailers become fields; the git SHA is kept in meta["git.sha"]</span>
+
+agit -C imported git export gitproj-export --json      <span class="c-cmt"># via git fast-import; incremental on re-run</span></pre>
+    <p>The bridge shells out to the <code>git</code> binary. Full history, branches, tags, modes, symlinks and submodule pins round-trip; re-running an import is incremental. Keep a git mirror this way for the tools and people who need git while the agents work in agit.</p>
+
+    <!-- ================================================================ -->
+    <h2 id="server">3. The server</h2>
+    <p><code>agit-server</code> is one static binary: an HTTP server that keeps every repository as plain files under one data directory. No database, no cache, no background worker. The HTTP contract is <a href="https://github.com/shadow-kernel/agit/blob/main/docs/API.md">docs/API.md</a>; the web UI, both SDKs and the CLI follow it.</p>
+
+    <h3 id="server-run">Run it</h3>
+<pre class="code">agit-server --data-dir ./agit-data --listen 127.0.0.1:7878
+<span class="c-cmt"># equivalent</span>
+AGIT_DATA_DIR=./agit-data AGIT_LISTEN=127.0.0.1:7878 agit-server
+
+curl -s http://127.0.0.1:7878/api/v1/health
+<span class="c-cmt"># {"status":"ok","version":"0.1.0"}</span></pre>
+    <table>
+      <thead><tr><th>Variable</th><th>Flag</th><th>Default</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>AGIT_DATA_DIR</code></td><td><code>--data-dir</code></td><td><code>./agit-data</code></td><td>directory holding every repository; the only state</td></tr>
+        <tr><td><code>AGIT_LISTEN</code></td><td><code>--listen</code></td><td><code>127.0.0.1:7878</code></td><td>socket address (<code>0.0.0.0:7878</code> in containers)</td></tr>
+        <tr><td><code>AGIT_SERVER_TOKEN</code></td><td><code>--token</code></td><td>unset (open mode)</td><td>root bearer token; an empty value is a (bad) token, not "off"</td></tr>
+        <tr><td><code>AGIT_WEB_DIR</code></td><td><code>--web-dir</code></td><td>unset</td><td>built web UI, served at <code>/</code> with SPA fallback</td></tr>
+        <tr><td><code>RUST_LOG</code></td><td></td><td><code>info,tower_http=info</code></td><td>log filter; <code>tower_http=debug</code> logs each request</td></tr>
+        <tr><td><code>AGIT_FSYNC</code></td><td></td><td><code>refs</code></td><td>durability: <code>refs</code>, <code>all</code>, <code>none</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="server-auth">Authentication and access</h3>
+    <div class="callout warn"><strong>Never run an open server on a reachable interface.</strong><p>Without <code>AGIT_SERVER_TOKEN</code> the server is open: every request acts as an anonymous root. That is fine on <code>127.0.0.1</code> for development and nowhere else.</p></div>
+    <p><strong>Root token.</strong> Grants every permission and bootstraps everything else. Generate it with <code>openssl rand -hex 32</code>, keep it in an env file or secret, rotate by restarting with a new value. Clients send it as <code>Authorization: Bearer</code>: <code>AGIT_TOKEN</code> for the CLI, the <code>token</code> option in the SDKs, the settings popover in the web UI.</p>
+    <p><strong>Scoped tokens.</strong> Per agent, per job, per repository, optionally bound to an agent identity and with an expiry. A token can only grant scopes its creator holds; <code>*</code> scopes need root.</p>
+<pre class="code">U=http://127.0.0.1:7878/api/v1; H="Authorization: Bearer $ROOT"
+curl -s -X POST -H "$H" -H 'content-type: application/json' $U/auth/tokens \
+  -d '{"name":"coder-1 laptop","agent":"coder-1","scopes":[{"repo":"demo","access":"write"}],"ttl_secs":86400}'
+<span class="c-cmt"># {"token":"agit_da83a014…","id":"tok_803401c4e6","name":"coder-1 laptop","agent":"coder-1","scopes":[{"repo":"demo","access":"write"}],…}</span>
+curl -s -H "Authorization: Bearer agit_da83a014…" $U/auth/whoami
+<span class="c-cmt"># {"principal":"tok_803401c4e6","agent":"coder-1","root":false,"scopes":[{"repo":"demo","access":"write"}]}</span>
+curl -s -H "$H" $U/auth/tokens                      <span class="c-cmt"># metadata only, hashes on disk</span>
+curl -s -X DELETE -H "$H" $U/auth/tokens/tok_803401c4e6</pre>
+    <ul>
+      <li><code>scopes</code>: <code>{repo: "&lt;name&gt;" | "*", access: "read" | "write" | "admin"}</code>. <code>GET</code> needs read; other methods write; repository create/delete, <code>policy</code>, <code>keys</code>, <code>webhooks</code>, <code>knowledge/rules</code> and <code>/auth/*</code> need admin. A principal only sees the repositories its scopes cover.</li>
+      <li><code>agent</code>: binds the token to an identity. Requests made with it act as that agent regardless of <code>X-Agit-Agent</code>, so events, leases, PR authorship and policy checks cannot be spoofed by header.</li>
+      <li>Every mutation and every denied request is appended to <code>&lt;data-dir&gt;/audit.jsonl</code> with time, principal, agent, method, path and status.</li>
+    </ul>
+    <div class="callout plan"><strong>In progress on main: sign in with your SSH key. <span class="badge progress">in progress</span></strong><p>The next release adds SSH-key authentication: operators register <code>ssh-ed25519</code> public keys with per-repository scopes (and start the server with <code>--admin-key ~/.ssh/id_ed25519.pub</code> instead of a shared secret), clients prove possession by signing a server challenge, <code>agit push</code> signs in automatically with <code>~/.ssh/id_ed25519</code> or ssh-agent, sessions are short-lived tokens, and a server without any credential configured refuses to listen on a non-loopback address. Until it ships, use scoped tokens bound to agents.</p></div>
+
+    <h3 id="server-docker">Docker and Compose</h3>
+<pre class="code">docker run -d --name agit -p 127.0.0.1:7878:7878 -v agit-data:/data \
+  -e AGIT_SERVER_TOKEN="$(openssl rand -hex 32)" ghcr.io/shadow-kernel/agit:0.1.0
+
+<span class="c-cmt"># docker-compose.yml in the repository root: named volume, token passed through from the host</span>
+AGIT_SERVER_TOKEN=$(openssl rand -hex 32) docker compose up -d
+docker compose up -d --build            <span class="c-cmt"># build from the checkout instead of pulling</span></pre>
+    <p>Bind mounts must be writable by uid 10001. The compose file binds <code>127.0.0.1:7878</code> (use <code>"7878:7878"</code> to expose directly), passes <code>AGIT_SERVER_TOKEN</code> through only when set on the host, and defines a health check.</p>
+
+    <h3 id="server-systemd">systemd</h3>
+<pre class="code">sudo useradd --system --home-dir /var/lib/agit --shell /usr/sbin/nologin agit
+sudo install -m 0755 agit-server agit /usr/local/bin/
+sudo mkdir -p /etc/agit && sudo install -m 0640 -o root -g agit deploy/agit-server.env /etc/agit/
+sudo install -m 0644 deploy/agit-server.service /etc/systemd/system/
+sudo $EDITOR /etc/agit/agit-server.env   <span class="c-cmt"># set AGIT_SERVER_TOKEN, AGIT_WEB_DIR</span>
+sudo systemctl daemon-reload && sudo systemctl enable --now agit-server
+journalctl -u agit-server -f</pre>
+    <p>The unit is hardened (<code>ProtectSystem=strict</code>, <code>NoNewPrivileges</code>, empty capability set, syscall filter, <code>StateDirectory=agit</code>, <code>LimitNOFILE=65536</code>), listens on <code>127.0.0.1:7878</code> and expects a reverse proxy in front.</p>
+
+    <h3 id="server-proxy">Reverse proxy and TLS</h3>
+    <p>The server speaks plain HTTP; terminate TLS in Caddy or nginx. Three settings matter: no response buffering and long read timeouts for <code>/api/v1/repos/*/events/stream</code> (long-lived SSE), no request body limit (pushes upload object streams in one request), and <code>Authorization</code> forwarded unchanged.</p>
+    <div class="tabs">
+      <div class="tablist" role="tablist"><button role="tab">Caddy</button><button role="tab">nginx</button></div>
+      <div class="tabpanel" role="tabpanel">
+<pre class="code" data-title="/etc/caddy/Caddyfile (deploy/Caddyfile)">agit.example.com {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	reverse_proxy 127.0.0.1:7878 {
+		flush_interval -1            <span class="c-cmt"># server-sent events: do not buffer</span>
+		transport http {
+			read_timeout 0
+			write_timeout 0
+			dial_timeout 10s
+		}
+	}
+	log {
+		output file /var/log/caddy/agit.log
+	}
+}</pre>
+      </div>
+      <div class="tabpanel" role="tabpanel" hidden>
+<pre class="code" data-title="deploy/nginx.conf (excerpt)">client_max_body_size 0;                    <span class="c-cmt"># pushes can be large</span>
+
+location ~ ^/api/v1/repos/[^/]+/events/stream$ {
+    proxy_pass http://127.0.0.1:7878;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 24h;
+    proxy_send_timeout 24h;
+}
+location / {
+    proxy_pass http://127.0.0.1:7878;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_request_buffering off;           <span class="c-cmt"># stream pushes instead of spooling to disk</span>
+    proxy_read_timeout 300s;
+}</pre>
+        <p class="small muted">Full file with TLS, HSTS and certbot instructions: <code>deploy/nginx.conf</code>.</p>
+      </div>
+    </div>
+
+    <h3 id="server-data">Data layout, backups, monitoring, upgrades</h3>
+<pre class="code" data-title="&lt;data-dir&gt;/">audit.jsonl                 denied requests and every mutation
+auth/                       scoped tokens (hashes) and metadata
+repos/&lt;repo&gt;/
+  meta.json                 {name, default_branch, created_ms}
+  objects/pack/             append-only segments seg-*.agp with .idx (AGX1)
+  refs/, refs.journal       branches, tags, journal with group commit
+  events.jsonl              per-repository event log
+  leases/  pulls/  knowledge/notes/  policy.json  keys.json  webhooks.json</pre>
+    <ul>
+      <li><strong>Backups.</strong> The data directory is the only state. Snapshot it (filesystem snapshot, or <code>tar</code> of a stopped or quiet server), ship copies off-host and <strong>encrypt them</strong>: <code>webhooks.json</code> holds secrets, <code>auth/</code> holds token hashes, notes may contain anything agents wrote.</li>
+      <li><strong>Liveness.</strong> <code>GET /api/v1/health</code> answers without a token. <strong>Activity.</strong> <code>GET /repos/{repo}/events?since=</code> or the SSE stream; <code>GET /repos/{repo}/agents</code>. <strong>Audit.</strong> tail <code>audit.jsonl</code> for <code>403</code> bursts and admin mutations.</li>
+      <li><strong>Capacity.</strong> Disk under <code>repos/*/objects</code> is the number to graph. Pushes and merges are fsync-bound, so IOPS and latency matter more than throughput. Starting points (not measurements): 1 vCPU / 512 MB for personal use, 2 vCPU / 1-2 GB for a team with tens of agents, 4+ vCPU / 4 GB / NVMe for hundreds of concurrent agents.</li>
+      <li><strong>Upgrades.</strong> Replace the binaries and restart. Before 1.0 a minor version may change on-disk formats; the CHANGELOG says so under "Changed" when it happens.</li>
+    </ul>
+
+    <h3 id="server-policy">Policies (branch protection)</h3>
+    <p>Per repository, <code>GET/PUT /repos/{repo}/policy</code> (admin), also editable in the web UI. Enforced on pushes (<code>refs/update</code>) and on <code>pulls/{n}/merge</code>; violations are <code>403 policy_violation</code> with a message that names the rule.</p>
+<pre class="code">curl -s -X PUT -H "$H" -H 'content-type: application/json' $U/repos/demo/policy -d '{
+  "protected_branches": ["main", "release/*"],
+  "require_pull_request": true,
+  "require_approvals": 1,
+  "require_intent": true,
+  "require_agent": true,
+  "require_checks": false,
+  "block_on_blockers": true,
+  "allowed_merge_agents": [],
+  "allowed_push_agents": [],
+  "max_files_per_commit": 0,
+  "require_signed": false
+}'</pre>
+    <p>Rules: protected branches cannot be deleted; with <code>require_pull_request</code> they only move through PR merges; approvals count the latest decision per reviewer and exclude the author; any <code>request_changes</code> blocks; unresolved <code>blocker</code> comments block; <code>require_intent</code>, <code>require_agent</code>, <code>max_files_per_commit</code> and <code>require_signed</code> are checked on every new commit the update introduces.</p>
+
+    <h3 id="server-keys">Signing keys</h3>
+<pre class="code">agit key generate                      <span class="c-cmt"># ~/.agit/keys/&lt;AGIT_AGENT&gt;.key, mode 0600</span>
+agit key generate --register           <span class="c-cmt"># and trust it for this agent on the remote (admin scope)</span>
+agit commit -m "..." --intent "..."    <span class="c-cmt"># signed automatically once a key named after the agent exists</span>
+agit verify HEAD                       <span class="c-cmt"># offline: the public key travels inside the commit</span>
+curl -s -H "$H" $U/repos/demo/keys     <span class="c-cmt"># registry: which keys are trusted for which agent</span></pre>
+    <p>A valid signature proves the commit was made by whoever holds the agent's private key; the registry decides whether that key is <em>trusted</em> for the agent. The policy <code>require_signed</code> refuses unsigned or untrusted commits on protected branches.</p>
+
+    <h3 id="server-webhooks">Webhooks</h3>
+<pre class="code">curl -s -X POST -H "$H" -H 'content-type: application/json' $U/repos/demo/webhooks \
+  -d '{"url":"https://ci.example.com/agit","kinds":["commit","pull.*"],"secret":"'"$(openssl rand -hex 16)"'"}'
+curl -s -X POST -H "$H" $U/repos/demo/webhooks/&lt;id&gt;/test          <span class="c-cmt"># queues a ping</span></pre>
+    <p>Deliveries carry <code>X-Agit-Event</code>, <code>X-Agit-Repo</code>, <code>X-Agit-Delivery</code> (idempotency key) and, with a secret, <code>X-Agit-Signature: blake3=&lt;hex&gt;</code> (keyed BLAKE3 over the body). Three attempts with backoff. Restrict the server's egress: it POSTs to whatever URL an admin registers.</p>
+
+    <h3 id="server-web">Web UI</h3>
+<pre class="code">cd web && pnpm install && pnpm build && cd ..
+agit-server --data-dir ./agit-data --web-dir web/dist     <span class="c-cmt"># UI at http://127.0.0.1:7878/</span>
+cd web && pnpm dev                                        <span class="c-cmt"># hot reload at http://localhost:5173</span></pre>
+    <p>Code browsing with syntax highlighting, commits with agent/intent/task filters, diffs and compare, pull requests with inline comments and reviews, agents, the lease board, the knowledge browser, settings for policy, webhooks, rules and keys, and a token admin page. The UI keeps the token in <code>localStorage</code> and sends it as a header; there are no cookies.</p>
+
+    <!-- ================================================================ -->
+    <h2 id="connect">4. Client meets server</h2>
+    <h3 id="push-clone">Remotes, push, clone, pull</h3>
+<pre class="code">export AGIT_TOKEN=agit_da83a014…                              <span class="c-cmt"># the client's credential</span>
+agit remote add origin http://127.0.0.1:7878/api/v1/repos/demo
+agit push --create                                            <span class="c-cmt"># creates the remote repository, CAS on the ref</span>
+<span class="c-cmt"># {"ok":true,"result":{"remote":"origin","branch":"main","old":null,"new":"44b9a0f2…","objects_sent":33,"up_to_date":false}}</span>
+
+cd .. && agit clone http://127.0.0.1:7878/api/v1/repos/demo demo-b && cd demo-b
+agit fetch                                                    <span class="c-cmt"># refs/remotes/origin/*</span>
+agit pull                                                     <span class="c-cmt"># fetch + merge (fast-forward when possible)</span>
+agit push origin feature/x</pre>
+    <p>Pushes send only the objects the server is missing and update the ref with compare-and-swap; a concurrent move answers <code>ref_conflict</code> (exit 75): pull, then push again. A non-fast-forward push is detected on the client before any network write.</p>
+
+    <h3 id="prs">Pull requests and reviews</h3>
+<pre class="code">agit switch -c feature/config
+<span class="c-cmt"># ... edit, add, commit with --intent and --task ...</span>
+agit pr create --push -t "Load greeting from Config" -b "First step." \
+  --intent "Make the greeting configurable for DEMO-7" --task DEMO-7 --json
+agit pr view 1 --json | jq '.result | {mergeable, conflicts, commits: (.commits|length)}'
+
+<span class="c-cmt"># as reviewer-1, in another clone</span>
+AGIT_AGENT=reviewer-1 agit pr comment 1 --kind blocker --path src/config.rs --line 4 \
+  -b "Hard-coded greeting; read it from the environment."
+AGIT_AGENT=reviewer-1 agit pr review 1 --decision request_changes -b "See blocker"
+<span class="c-cmt"># ... author fixes, pushes; reviewer resolves the comment and approves ...</span>
+AGIT_AGENT=reviewer-1 agit pr review 1 --decision approve -b "lgtm"
+AGIT_AGENT=reviewer-1 agit pr merge 1                           <span class="c-cmt"># three-way merge on the server, CAS on main</span>
+agit pr list --state merged</pre>
+    <p>Comment kinds: <code>question</code>, <code>suggestion</code>, <code>blocker</code>, <code>note</code>. Decisions: <code>approve</code>, <code>request_changes</code>, <code>comment</code>. A merge refused by policy answers <code>policy_violation</code> with the rule in the message; a merge with conflicts answers <code>merge_conflicts</code> and <code>pr view</code> lists them.</p>
+
+    <h3 id="knowledge">Knowledge: notes, rules, context</h3>
+<pre class="code"><span class="c-cmt"># tag rules: which tags a note about a path should carry (admin)</span>
+curl -s -X PUT -H "$H" -H 'content-type: application/json' $U/repos/demo/knowledge/rules \
+  -d '[{"pattern":"src/**","tags":["area:core","lang:rust"]}]'
+
+agit know add -t "Config is read once at startup" --tag kind:fact --tag area:core \
+  --path 'src/config.rs' --commit HEAD -b "Changing GREETING needs a restart."
+agit know context src/config.rs            <span class="c-cmt"># notes, suggested tags, recent commits, leases, open PRs, active agents</span>
+agit know search --query "startup config" --tag area:core
+agit know sync                             <span class="c-cmt"># push local-only notes, refresh the offline cache in .agit/knowledge</span></pre>
+    <p>Notes carry a <code>valid_at</code> commit; when a covered path changes afterwards the note is <code>stale</code> until someone validates it. Every merged pull request produces a <em>draft</em> note (title, intent, task, changed files, reviews) that an agent accepts or discards. Search is BM25 over title, body, tags and paths.</p>
+
+    <h3 id="events">Events, server-side leases, activity</h3>
+<pre class="code">agit events --follow --kind lease.                                  <span class="c-cmt"># local log</span>
+curl -N -H "$H" "$U/repos/demo/events/stream?since=0"               <span class="c-cmt"># SSE, replay then live</span>
+curl -s -H "$H" "$U/repos/demo/events?since=120&limit=50"
+curl -s -X POST -H "$H" -H 'content-type: application/json' $U/repos/demo/leases \
+  -d '{"holder":"coder-1","paths":["src/auth/**"],"mode":"exclusive","ttl_secs":1800,"note":"rotate tokens"}'
+curl -s -H "$H" $U/repos/demo/agents                                <span class="c-cmt"># per-agent commits, leases, open PRs, last seen</span></pre>
+    <p>Local leases (in <code>.agit/leases/</code>) are for agents sharing a filesystem; server leases are for agents on different machines. The <code>context</code> endpoint and the web UI's lease board show the server ones.</p>
+
+    <!-- ================================================================ -->
+    <h2 id="agents">5. Agents</h2>
+    <h3 id="agent-identity">Identity</h3>
+<pre class="code">export AGIT_AGENT=coder-1 AGIT_MODEL=my-model-v3 AGIT_RUN_ID=run-2026-10-19-a
+export AGIT_TOKEN=…           <span class="c-cmt"># a scoped token bound to coder-1, write on the repositories it works in</span></pre>
+    <p><code>AGIT_AGENT</code> becomes the commit's <code>agent.id</code>, the lease holder, the <code>X-Agit-Agent</code> header and the default signing-key name. Use a stable id per role (<code>coder-1</code>, <code>reviewer-1</code>) and put per-run correlation in <code>AGIT_RUN_ID</code>.</p>
+
+    <h3 id="agent-loop">The loop</h3>
+    <div class="steps">
+      <div class="step"><div><h3>Read before you touch</h3><p class="muted"><code>agit know context &lt;path&gt; --json</code></p></div></div>
+      <div class="step"><div><h3>Claim what you will change</h3><p class="muted"><code>agit lease claim &lt;paths&gt; --ttl 30m --note "…"</code>; renew while working, <code>release --all</code> when done</p></div></div>
+      <div class="step"><div><h3>Work in your own workspace or branch</h3><p class="muted"><code>agit ws new coder-1</code> or <code>agit switch -c feature/x</code></p></div></div>
+      <div class="step"><div><h3>Checkpoint before risky edits</h3><p class="muted"><code>agit checkpoint -m "…"</code>, <code>agit restore &lt;id&gt;</code> to roll back</p></div></div>
+      <div class="step"><div><h3>Commit with intent</h3><p class="muted"><code>agit commit -m "what" --intent "why" --task T-1 --meta ci.tests=pending</code></p></div></div>
+      <div class="step"><div><h3>Push and open a pull request</h3><p class="muted"><code>agit pr create --push -t "…" --intent "…" --task T-1</code></p></div></div>
+      <div class="step"><div><h3>Record what you learned</h3><p class="muted"><code>agit know add -t "…" --tag kind:gotcha --path 'src/x/**' -b "…"</code></p></div></div>
+    </div>
+
+    <h3 id="agent-errors">Error handling</h3>
+    <table>
+      <thead><tr><th>code</th><th>exit</th><th>meaning</th><th>what to do</th></tr></thead>
+      <tbody>
+        <tr><td><code>ref_conflict</code></td><td>75</td><td>someone moved the ref you based your update on</td><td>fetch or pull, re-check, retry</td></tr>
+        <tr><td><code>lock_timeout</code></td><td>75</td><td>an internal lock was busy (10 s refs, 5 s leases/events)</td><td>back off, retry</td></tr>
+        <tr><td><code>lease_conflict</code></td><td>3</td><td>another agent holds the path</td><td>pick other work, wait for expiry, or negotiate; never blind-retry</td></tr>
+        <tr><td><code>merge_conflicts</code></td><td>3</td><td>three-way merge needs a decision</td><td>resolve files with diff3 markers, <code>agit add</code>, commit</td></tr>
+        <tr><td><code>dirty_worktree</code></td><td>3</td><td>local edits would be overwritten</td><td>checkpoint or commit first</td></tr>
+        <tr><td><code>policy_violation</code></td><td>1</td><td>server policy refused the change</td><td>read the message: missing intent, approvals, blockers, or a direct push to a protected branch</td></tr>
+        <tr><td><code>forbidden</code></td><td>1</td><td>missing or insufficient token scope</td><td>ask the operator for a token with the needed scope</td></tr>
+        <tr><td><code>hash_mismatch</code>, <code>corrupt_object</code></td><td>1</td><td>storage returned bytes that do not match the id</td><td><code>agit fsck</code>; restore the object from a clone or backup</td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="mcp">MCP server</h3>
+    <p><code>agit mcp</code> runs a Model Context Protocol server over stdio with 33 tools that return the same JSON as the CLI; failures come back as <code>isError</code> with the same codes. Register it in any MCP client, started inside a repository:</p>
+<pre class="code" data-title=".mcp.json">{ "mcpServers": { "agit": { "command": "agit", "args": ["mcp"], "env": { "AGIT_AGENT": "coder-1", "AGIT_MODEL": "my-model" } } } }</pre>
+    <table>
+      <thead><tr><th>Group</th><th>Tools</th></tr></thead>
+      <tbody>
+        <tr><td>Repository state</td><td><code>agit_status</code>, <code>agit_log</code>, <code>agit_show</code>, <code>agit_diff</code>, <code>agit_read_file</code>, <code>agit_ls</code>, <code>agit_branches</code>, <code>agit_workspaces</code>, <code>agit_events</code></td></tr>
+        <tr><td>Writing</td><td><code>agit_add</code>, <code>agit_commit</code> (intent, task, agent, meta, sign), <code>agit_checkpoint</code>, <code>agit_checkpoint_list</code>, <code>agit_restore</code>, <code>agit_switch</code>, <code>agit_merge</code></td></tr>
+        <tr><td>Coordination</td><td><code>agit_lease_claim</code>, <code>agit_lease_release</code>, <code>agit_lease_list</code>, <code>agit_lease_check</code></td></tr>
+        <tr><td>Remote and pull requests</td><td><code>agit_push</code>, <code>agit_pull</code>, <code>agit_pr_create</code>, <code>agit_pr_list</code>, <code>agit_pr_view</code>, <code>agit_pr_review</code>, <code>agit_pr_comment</code>, <code>agit_pr_merge</code></td></tr>
+        <tr><td>Knowledge</td><td><code>agit_context</code>, <code>agit_know_search</code>, <code>agit_know_get</code>, <code>agit_know_add</code>, <code>agit_know_sync</code></td></tr>
+      </tbody>
+    </table>
+    <p>The server's <code>instructions</code> describe the loop above, so a model that reads them knows to call <code>agit_context</code> before editing and <code>agit_lease_claim</code> for the paths it will change.</p>
+
+    <h3 id="claude">Claude Code integration</h3>
+    <p>Two halves that work independently and are better together: the MCP server gives Claude typed tools; five hooks make the discipline deterministic, because a model that forgot to call <code>agit_context</code> still gets the notes, and a model that tries to edit a path another agent owns is stopped before the write happens.</p>
+<pre class="code">cd /path/to/your/agit/repo
+/path/to/agit/integrations/claude-code/install.sh            <span class="c-cmt"># project scope: hooks + settings + CLAUDE.md snippet</span>
+/path/to/agit/integrations/claude-code/install.sh --mcp      <span class="c-cmt"># also writes .mcp.json</span>
+<span class="c-cmt"># or register the MCP server by hand</span>
+claude mcp add --scope project agit -e AGIT_AGENT=claude-code -- agit mcp
+<span class="c-cmt"># options: --agent &lt;id&gt;, --global (every agit repo on the machine), --uninstall</span>
+integrations/claude-code/test.sh                              <span class="c-cmt"># self-test: builds a temp repo, simulates every hook</span></pre>
+    <table>
+      <thead><tr><th>Hook</th><th>Event</th><th>Behaviour</th></tr></thead>
+      <tbody>
+        <tr><td><code>pre-edit.sh</code></td><td>PreToolUse on Edit / Write / MultiEdit / NotebookEdit</td><td>Runs <code>agit lease check</code>. A path under <strong>another agent's exclusive lease exits 2</strong>: the edit is not performed and Claude sees who holds the lease and when it expires. Otherwise injects the path's context (note titles with kind, suggested tags, open PRs, other agents' shared leases) as <code>additionalContext</code>, cached 60 s.</td></tr>
+        <tr><td><code>post-edit.sh</code></td><td>PostToolUse, same tools</td><td>Claims a 30-minute exclusive lease on the file if none of this agent's leases covers it (<code>AGIT_HOOK_LEASE_TTL</code> changes the TTL). Covering directory or glob leases are reused, never duplicated.</td></tr>
+        <tr><td><code>checkpoint.sh</code></td><td>Stop, SubagentStop</td><td>Records <code>agit checkpoint -m "claude-code stop"</code> when the tree changed. Never fails, never prints.</td></tr>
+        <tr><td><code>session-start.sh</code></td><td>SessionStart</td><td>Briefing: repository, branch, HEAD, dirty counts, remote, agent id, active leases with minutes left, active hooks, the loop and the error-code rules.</td></tr>
+        <tr><td><code>pre-commit-guard.sh</code></td><td>PreToolUse on Bash</td><td><code>agit commit</code> without <code>--intent</code> <strong>is blocked (exit 2)</strong> with the corrected command; <code>git commit</code> / <code>git push</code> inside an agit repository get a reminder; <code>agit pr create</code> without <code>--intent</code> gets a reminder.</td></tr>
+      </tbody>
+    </table>
+    <p class="small muted">Hooks are shell scripts executed with your user's permissions. Read <code>integrations/claude-code/hooks/*.sh</code> before installing them, as you would any pre-commit hook. They only run <code>agit</code> subcommands and <code>python3 -I</code> or <code>jq</code>, and send nothing but the path to your configured agit server. <code>AGIT_HOOKS_DISABLE=1</code> pauses all of them.</p>
+
+    <h3 id="sdks">SDKs</h3>
+    <div class="tabs">
+      <div class="tablist" role="tablist"><button role="tab">Python</button><button role="tab">TypeScript</button></div>
+      <div class="tabpanel" role="tabpanel">
+        <p><code>agit-sdk</code> (<code>sdk/python</code>): zero dependencies, Python 3.10+, typed client for every endpoint, SSE streaming, typed errors with the same codes, and an <code>AgentSession</code> helper that claims leases, opens pull requests, records notes and releases leases on exit.</p>
+<pre class="code">from agit import Client, AgentSession
+
+client = Client("http://127.0.0.1:7878/api/v1", agent="coder-1")      <span class="c-cmt"># token from AGIT_TOKEN</span>
+with AgentSession(client, "demo", "coder-1") as s:
+    ctx = s.context("src/auth/login.rs")        <span class="c-cmt"># notes, suggested tags, recent commits, leases, open PRs</span>
+    s.claim(["src/auth"], ttl_secs=1800, note="session refactor")
+    ...                                         <span class="c-cmt"># edit, commit and push with the CLI or MCP tools</span>
+    s.open_pr(title="Rotate session tokens", source="feature/x", intent="close SEC-12")
+    s.remember(title="Session store lags", body="...", tags=["kind:gotcha", "area:auth"], paths=["src/auth/**"])</pre>
+      </div>
+      <div class="tabpanel" role="tabpanel" hidden>
+        <p><code>@agit/sdk</code> (<code>sdk/typescript</code>): zero dependencies, ESM + CJS, Node 18+, Deno, Bun and browsers; SSE over <code>fetch</code> with reconnect, typed errors, <code>AgentSession</code> with <code>withLeases(paths, fn)</code>.</p>
+<pre class="code">import { AgitClient, AgentSession } from "@agit/sdk";
+
+const client = new AgitClient({ baseUrl: "http://127.0.0.1:7878/api/v1", agent: "coder-1" });
+const session = new AgentSession(client, "demo", "coder-1");
+const ctx = await client.getContext("demo", "src/auth/login.rs");
+await session.withLeases(["src/auth"], async () => {
+  // edit, commit and push with the CLI or MCP tools
+  await client.pulls.create("demo", { title: "Rotate session tokens", source: "feature/x", intent: "close SEC-12" });
+});
+for await (const ev of client.streamEvents("demo", { since: 0 })) console.log(ev.kind, ev.data);</pre>
+      </div>
+    </div>
+
+    <h3 id="multi-agent">Many agents in one repository</h3>
+    <ul>
+      <li><strong>One workspace per agent.</strong> <code>agit ws new coder-2 --agent coder-2</code> creates <code>../repo.coder-2</code> on branch <code>ws/coder-2</code>. Never share a working directory.</li>
+      <li><strong>Lease etiquette.</strong> Claim the smallest covering path, set a TTL that matches the task, renew while working, release on completion. Use <code>--shared</code> for "I am reading this".</li>
+      <li><strong>Checkpoint cadence.</strong> One before every destructive step, one at the end of every turn (the Claude Code hooks do exactly this).</li>
+      <li><strong>Reviewer agents.</strong> A second identity comments with a kind, reviews, and merges under a policy that requires an approval; the author is excluded from approvals.</li>
+      <li><strong>Observe the fleet.</strong> <code>GET /repos/{repo}/agents</code>, the SSE stream, the lease board and the Agents tab in the web UI.</li>
+    </ul>
+
+    <!-- ================================================================ -->
+    <h2 id="large">6. Large repositories</h2>
+    <p>The full treatment, including the design for 80 GB game repositories and the limits of 0.1.0, is on <a href="scale.html">its own page</a>. The short version for today:</p>
+    <ul>
+      <li>Keep single files below 4 GiB (32-bit object length fields) and size the agent's machine for the largest asset plus the largest fetch, because objects are handled in memory.</li>
+      <li>Split engine, tools and content into repositories pinned through <code>.agitmodules</code>; give agents clones of what they work on.</li>
+      <li>Lease asset directories before editing binaries; they do not merge.</li>
+      <li>Ignore build output in <code>.agitignore</code>; <code>status</code> cost grows with tracked file count.</li>
+      <li>Put the server's data directory on NVMe, remove body-size limits on the proxy, back the directory up nightly.</li>
+    </ul>
+
+    <!-- ================================================================ -->
+    <h2 id="troubleshooting">7. Troubleshooting</h2>
+    <table>
+      <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
+      <tbody>
+        <tr><td><code>not_a_repository</code></td><td>No <code>.agit</code> here or above; <code>agit root</code> says where you are. Secondary workspaces have a <code>.agit</code> <em>file</em> pointing at the primary.</td></tr>
+        <tr><td><code>403 forbidden</code> on every call</td><td>Token set on the server but missing or different on the client (<code>AGIT_TOKEN</code>, SDK option, web popover). Check the server was not started with an empty <code>AGIT_SERVER_TOKEN=</code>.</td></tr>
+        <tr><td><code>403 … token lacks Admin access</code></td><td>A scoped token hitting an admin endpoint (policy, keys, webhooks, rules, repository create/delete, tokens). Use an admin or root token.</td></tr>
+        <tr><td><code>lock_timeout</code></td><td>Another process held <code>refs.lock</code> (10 s) or <code>leases.lock</code> / <code>events.lock</code> (5 s). Retry; if it persists something is stuck holding a descriptor, not a stale file.</td></tr>
+        <tr><td>Lease conflict with yourself</td><td>The holder is the exact string in <code>--holder</code> / <code>AGIT_AGENT</code>. A lease under a different id counts as foreign; release it by id or wait for the TTL.</td></tr>
+        <tr><td><code>hash_mismatch</code> / <code>corrupt_object</code></td><td>Storage returned bytes that do not match the id. <code>agit fsck</code>; <code>agit fetch</code> brings the object back if the server has it.</td></tr>
+        <tr><td>Hooks do nothing at session start</td><td>Check <code>/hooks</code> in Claude Code; run <code>session-start.sh</code> by hand. GUI launches may have a short <code>PATH</code>: set <code>AGIT_BIN=/full/path/agit</code> in <code>settings.json</code> env.</td></tr>
+        <tr><td>Context never appears in hooks</td><td>Needs a remote and a reachable server; failures are cached 60 s per path under <code>$TMPDIR/agit-claude-hooks/</code>.</td></tr>
+        <tr><td>SSE stream closes or buffers</td><td>Proxy buffering or read timeouts; use the Caddy or nginx settings above.</td></tr>
+        <tr><td>Push rejected as too large</td><td><code>client_max_body_size</code> on the proxy; set it to 0 or a cap that fits your repositories.</td></tr>
+        <tr><td>Tags missing on the server</td><td><code>agit push</code> pushes a branch; use <code>agit push --tags</code> to send tags.</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ================================================================ -->
+    <h2 id="reference">8. Reference</h2>
+    <h3 id="env">Environment variables (client)</h3>
+    <table>
+      <thead><tr><th>Variable</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>AGIT_JSON</code></td><td><code>true</code> enables <code>--json</code> for every command</td></tr>
+        <tr><td><code>AGIT_AGENT</code>, <code>AGIT_MODEL</code>, <code>AGIT_RUN_ID</code>, <code>AGIT_ON_BEHALF_OF</code></td><td>the <code>agent</code> fields on commits; agent id is also lease holder and <code>X-Agit-Agent</code></td></tr>
+        <tr><td><code>AGIT_AUTHOR_NAME</code>, <code>AGIT_AUTHOR_EMAIL</code></td><td>commit author when <code>user.name</code> / <code>user.email</code> are not configured</td></tr>
+        <tr><td><code>AGIT_TOKEN</code></td><td>bearer token for clone, fetch, push, pull, pr, know, key register, mcp</td></tr>
+        <tr><td><code>AGIT_SIGN</code>, <code>AGIT_KEY</code>, <code>AGIT_KEYS_DIR</code></td><td>signing mode (<code>auto</code> default), default key name, key directory (<code>~/.agit/keys</code>)</td></tr>
+        <tr><td><code>AGIT_FSYNC</code></td><td><code>refs</code> (default), <code>all</code>, <code>none</code></td></tr>
+        <tr><td><code>AGIT_PACK</code></td><td><code>0</code> writes loose objects instead of pack segments</td></tr>
+      </tbody>
+    </table>
+    <h3 id="exit-codes">Exit codes</h3>
+    <p><code>0</code> success · <code>1</code> error · <code>3</code> conflict (<code>merge_conflicts</code>, <code>lease_conflict</code>, <code>dirty_worktree</code>, <code>non_fast_forward</code>) · <code>75</code> retryable (<code>ref_conflict</code>, <code>lock_timeout</code>). Durations take an integer with a unit: <code>s</code>, <code>m</code>, <code>h</code>, <code>d</code>.</p>
+    <h3 id="more">Further reading</h3>
+    <ul>
+      <li><a href="https://github.com/shadow-kernel/agit/tree/main/docs/handbook">The handbook</a>: 18 chapters, every flag and JSON shape, FAQ, glossary, comparison.</li>
+      <li><a href="https://github.com/shadow-kernel/agit/blob/main/docs/API.md">docs/API.md</a>: the HTTP contract the UI, SDKs and CLI follow.</li>
+      <li><a href="https://github.com/shadow-kernel/agit/blob/main/docs/DEPLOYMENT.md">docs/DEPLOYMENT.md</a> and <a href="https://github.com/shadow-kernel/agit/blob/main/docs/SECURITY.md">docs/SECURITY.md</a>: systemd, proxies, sizing, threat model, hardening checklist.</li>
+      <li><a href="https://github.com/shadow-kernel/agit/blob/main/docs/CLAUDE-CODE.md">docs/CLAUDE-CODE.md</a> and <a href="https://github.com/shadow-kernel/agit/blob/main/docs/AGENT-GUIDE.md">docs/AGENT-GUIDE.md</a>: the integration and the loop on one page.</li>
+      <li><a href="https://github.com/shadow-kernel/agit/blob/main/docs/ARCHITECTURE.md">docs/ARCHITECTURE.md</a> and the <a href="https://github.com/shadow-kernel/agit/tree/main/docs/rfcs">RFCs</a>: byte layouts, the planned pack, journal and replication design.</li>
+    </ul>
+  </article>
+</div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><a class="brand" href="./"><img src="assets/logo.svg" alt="" width="28" height="28"> agit</a><p>Version control and collaboration for AI agents. MIT or Apache-2.0.</p></div>
+    <div><h4>Site</h4><a href="index.html#why">Why agit</a><a href="features.html">Features</a><a href="scale.html">Large repositories</a><a href="guide.html">Guide</a></div>
+    <div><h4>Project</h4><a href="https://github.com/shadow-kernel/agit">GitHub repository</a><a href="https://github.com/shadow-kernel/agit/releases">Releases</a><a href="https://github.com/shadow-kernel/agit/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/ROADMAP.md">Roadmap</a></div>
+    <div><h4>Documentation</h4><a href="https://github.com/shadow-kernel/agit/tree/main/docs/handbook">Handbook</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/API.md">HTTP API</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/DEPLOYMENT.md">Deployment</a><a href="https://github.com/shadow-kernel/agit/blob/main/docs/SECURITY.md">Security</a></div>
+  </div>
+</footer>
+<script src="assets/site.js" defer></script>
+</body>
+</html>
